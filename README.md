@@ -1,4 +1,4 @@
-# Smart Lock
+# Smart Lock - WIP
 
 <img src="https://freesvg.org/img/1543428916.png" align="right"
      alt="Size Limit logo by Anton Lovchikov" height="290">
