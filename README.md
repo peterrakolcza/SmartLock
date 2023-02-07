@@ -1,6 +1,6 @@
 # Smart Lock
 
-<img src="https://ai.github.io/size-limit/logo.svg" align="right"
+<img src="https://freesvg.org/img/1543428916.png" align="right"
      alt="Size Limit logo by Anton Lovchikov" width="120" height="178">
 
 A smart lock built using ESP8266, an affordable microcontroller with WiFi capabilities, that can be controlled through a mobile app or web interface.
