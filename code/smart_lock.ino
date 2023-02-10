@@ -27,15 +27,16 @@ int counter = 0;
 //#############################################################################################################################################
 
 #ifndef STASSID
-#define STASSID "****************"
-#define STAPSK  "****************"
+#define STASSID "*******************" // CHANGE THIS
+#define STAPSK  "*******************" // CHANGE THIS
 #endif
 
 const int model = 2;   // enter the model number (see below)
-const int cutOff = 795;
-const int numberOfTurnsRequired = 3;
-const int timeOutRequiredTurns = 30000;
-const int timeOutServo = 3000;
+const int cutOff = 810;  // CHANGE THIS
+const int numberOfTurnsRequired = 3; // CHANGE THIS
+const int timeOutRequiredTurns = 30000; // CHANGE THIS
+const int timeOutServo = 4000; // CHANGE THIS
+const int minTimeToLock = 2500; // CHANGE THIS
 
 /*
           "ACS712ELCTR-05B-T",// for model use 0
@@ -74,7 +75,7 @@ void detachServo() {
   delay(500);
   while (true) {
     if (readCurrent() < cutOff) {
-      delay(250);
+      delay(500);
       if (readCurrent() < cutOff) {
         servo.detach();
         break;
@@ -88,21 +89,22 @@ void detachServo() {
   }
 }
 
-bool lock() {
+void lock() {
+  int startTime;
   if (!locked) {
+    startTime = millis();
     servo.attach(SERVOPIN);
-    servo.write(1);
+    servo.write(180);
     detachServo();
   }
 
   locked = true;
-  return true;
 }
 
 void unlock() {
   if (locked) {
     servo.attach(SERVOPIN);
-    servo.write(180);
+    servo.write(1);
     detachServo();
   }
 
@@ -324,7 +326,7 @@ void initWifi() {
 //#############################################################################################################################################
 
 void handleLED() {
-  if (locked) {
+  if (!locked) {
     digitalWrite(RINGLED, HIGH);
   } else {
     digitalWrite(RINGLED, LOW);
