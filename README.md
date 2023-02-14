@@ -17,13 +17,14 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart-lock) project, huge thanks for providing the basic STL files and logic. I tried to further improve the project and make it possible to integrate it into existing smart home ecosystems like Apple HomeKit.
 
 ### **Furthermore, the objectives were almost identical:**
-* Device must be cheap. This means no expensive motors or sensors can be used.
-* Device must be presentable. I don't want to see any cables, electronics not even the motor itself on my apartment door (since it is a very small apartment).
-* No modifications on door itself. I am a tenant at this apartment right now so I can't modify anything that can't be fixed.
-* It should be secure. Most of the RF devices are vulnerable to replay attacks, the lock should be safe enough.
+
+- Device must be cheap. This means no expensive motors or sensors can be used.
+- Device must be presentable. I don't want to see any cables, electronics not even the motor itself on my apartment door (since it is a very small apartment).
+- No modifications on door itself. I am a tenant at this apartment right now so I can't modify anything that can't be fixed.
+- It should be secure. Most of the RF devices are vulnerable to replay attacks, the lock should be safe enough.
 
 <p align="center">
-<img src="images/hackaday.jpeg" height=500px />
+<img src="images/hackaday_cropped.jpeg" height=500px />
 </p>
 
 <br>
@@ -53,8 +54,37 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 ## 🔌 Wiring diagram
 
+### **Things to keep in mind:**
+
+- Current sensor outputs 0-5V, however the ESP's analogue-to-digital converter expects 0-3.3V. Thus, it is neccessary to use a voltage divider.
+- Wiring diagram uses random digital ports, not the ones I defined in the code! Refer to the _default pins_ table.
+
+<br>
+
+<img src="images/ESP8266-Pinout.png" align=right height="200px">
+
+| Pin on ESP | Pin in code |  Funcionality  |
+| :--------: | :---------: | :------------: |
+|     A0     |     A0      | Current sensor |
+|     D4     |      2      |  Servo signal  |
+|     D3     |      0      |  Reed sensor   |
+|     D2     |      4      |     Button     |
+|     A1     |      5      |      LED       |
+
+<br>
+
+<h2 style="text-align: center;">⚠️ IMPORTANT:  ⚠️</h2>
+
+### **Minimum components required with basic functionality:**
+
 <p align="center">
-<img src="https://pressbooks.bccampus.ca/basicmotorcontrol/wp-content/uploads/sites/887/2020/01/Wiring-Diagram-Pushbutton-1024x764.png" height="290">
+<img src="images/all_function.png" height="500px">
+</p>
+
+### **All funcionality:**
+
+<p align="center">
+<img src="images/all_function.png" height=500px />
 </p>
 
 <br>
@@ -69,8 +99,9 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 ## 🔴 Optional features
 
-* **Autolock:** it is possible to disable this feature or add bigger time delay
-* **Sensor:** it is possible to add a Reel-relay making it possible to track the lock's state even opening/closing it in manual mode. See the source code for details. *However, if you decide not to use it, you do not have to change anything to get the lock working.*
+- **Autolock:** it is possible to disable this feature or add bigger time delay
+- **Sensor:** it is possible to add a Reel-relay making it possible to track the lock's state even opening/closing it in manual mode. See the source code for details. _However, if you decide not to use it, you do not have to change anything to get the lock working._
+- **Button:** it enables the user to open or close the door from the inside manually without using the phone.
 
 <br>
 
@@ -87,6 +118,7 @@ Homebridge allows you to integrate with smart home devices that do not natively 
 The lock uses the [EspLock](https://github.com/volca/homebridge-esplock) Homebridge plugin to integrate it into the Apple HomeKit ecosystem. Huge thanks to [volca](https://github.com/volca)!
 
 Example configuration:
+
 ```json
 {
   "accessories": [
@@ -116,8 +148,8 @@ setTimeout(function () {
 
 ## 💡 Future ideas
 
-* Making the housing sturdier and more robust to reduce wiggle
-* Designing a custom PCB for easier installation
+- Making the housing sturdier and more robust to reduce wiggle
+- Designing a custom PCB for easier installation
 
 <br>
 
