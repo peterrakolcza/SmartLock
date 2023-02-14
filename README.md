@@ -54,7 +54,7 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 ## 🔌 Wiring diagram
 
-<h2 style="text-align: center;">⚠️ The wiring looks complicated, but it is not! With a little bit of knowledge, it is feasible. I recommend putting the circuit together one-by-one, so you can test every component. Designing a custom PCB would eliminate this issue... ⚠️</h2>
+<h3 style="text-align: center;">⚠️ The wiring looks complicated, but it is not! With a little bit of knowledge, it is feasible. I recommend putting the circuit together one-by-one, so you can test every component. Designing a custom PCB would eliminate this issue... ⚠️</h3>
 
 ### **Things to keep in mind:**
 
@@ -75,7 +75,7 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 <br>
 
-<h2 style="text-align: center;">⚠️ IMPORTANT: both of the diagrams contain errors, the servo's VIN and ground terminals should have been connected to the current sensor's terminals! ⚠️</h2>
+<h3 style="text-align: center;">⚠️ IMPORTANT: both of the diagrams contain errors, the servo's VIN and ground terminals should have been connected to the current sensor's terminals! ⚠️</h3>
 
 ### **Minimum components required with basic functionality:**
 
