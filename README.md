@@ -54,6 +54,8 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 ## 🔌 Wiring diagram
 
+<h2 style="text-align: center;">⚠️ The wiring looks complicated, but it is not! With a little bit of knowledge, it is feasible. I recommend putting the circuit together one-by-one, so you can test every component. Designing a custom PCB would eliminate this issue... ⚠️</h2>
+
 ### **Things to keep in mind:**
 
 - Current sensor outputs 0-5V, however the ESP's analogue-to-digital converter expects 0-3.3V. Thus, it is neccessary to use a voltage divider.
@@ -61,7 +63,7 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 <br>
 
-<img src="images/ESP8266-Pinout.png" align=right height="200px">
+<img src="images/ESP8266-Pinout.png" align=right height="250px">
 
 | Pin on ESP | Pin in code |  Funcionality  |
 | :--------: | :---------: | :------------: |
@@ -73,7 +75,7 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 <br>
 
-<h2 style="text-align: center;">⚠️ IMPORTANT:  ⚠️</h2>
+<h2 style="text-align: center;">⚠️ IMPORTANT: both of the diagrams contain errors, the servo's VIN and ground terminals should have been connected to the current sensor's terminals! ⚠️</h2>
 
 ### **Minimum components required with basic functionality:**
 
@@ -105,6 +107,32 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 <br>
 
+## 📙 API
+
+Example request to lock the door:
+
+```bash
+curl -X POST http://your-ip-address -H "Content-Type: application/x-www-form-urlencoded" -d "state=locked"
+```
+
+Example request to get the current state:
+
+```bash
+curl -X GET http://your-ip-address
+```
+
+Example response:
+
+```json
+{
+  "state": "locked",
+  "statusCode": 200,
+  "battery": 100
+}
+```
+
+<br>
+
 ## 🏠 Homebridge integration
 
 <br>
@@ -117,7 +145,7 @@ Homebridge allows you to integrate with smart home devices that do not natively 
 
 The lock uses the [EspLock](https://github.com/volca/homebridge-esplock) Homebridge plugin to integrate it into the Apple HomeKit ecosystem. Huge thanks to [volca](https://github.com/volca)!
 
-Example configuration:
+Example configuration, it is possible to use a static IP address or the hostname:
 
 ```json
 {
@@ -125,7 +153,7 @@ Example configuration:
     {
       "accessory": "EspLock",
       "name": "Front Door",
-      "url": "your-custom-or-homegrown-service-url"
+      "url": "your-locks-ip-address-or-hostname"
     }
   ]
 }
