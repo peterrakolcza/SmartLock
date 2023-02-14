@@ -23,9 +23,9 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 - No modifications on door itself. I am a tenant at this apartment right now so I can't modify anything that can't be fixed.
 - It should be secure. Most of the RF devices are vulnerable to replay attacks, the lock should be safe enough.
 
-<p align="center">
-<img src="images/hackaday_cropped.jpeg" height=500px />
-</p>
+|                Inspiration - hackaday.io                |                    Version 1                    |
+| :-----------------------------------------------------: | :---------------------------------------------: |
+| <img src="images/hackaday_cropped.jpeg" height=400px /> | <img src="images/final_V1.jpeg" height=400px /> |
 
 <br>
 
