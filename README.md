@@ -178,6 +178,9 @@ setTimeout(function () {
 
 - Making the housing sturdier and more robust to reduce wiggle
 - Designing a custom PCB for easier installation
+- Adding hole for power
+- Adding hole for Reed-relay
+- Making a battery-powered version
 
 <br>
 
