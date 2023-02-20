@@ -71,23 +71,9 @@ git clone https://github.com/username/esp8266-smart-lock.git
 |     D4     |      2      |  Servo signal  |
 |     D3     |      0      |  Reed sensor   |
 |     D2     |      4      |     Button     |
-|     A1     |      5      |      LED       |
+|     D1     |      5      |      LED       |
 
 <br>
-
-<h3 style="text-align: center;">⚠️ IMPORTANT: both of the diagrams contain errors, the servo's VIN and ground terminals should have been connected to the current sensor's terminals! ⚠️</h3>
-
-### **Minimum components required with basic functionality:**
-
-<p align="center">
-<img src="images/all_function.png" height="500px">
-</p>
-
-### **All funcionality:**
-
-<p align="center">
-<img src="images/all_function.png" height=500px />
-</p>
 
 <br>
 

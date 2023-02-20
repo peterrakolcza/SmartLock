@@ -1,0 +1,4 @@
+(sym_lib_table
+  (version 7)
+  (lib (name "NodeMCUv3")(type "Legacy")(uri "${KIPRJMOD}/libs/ESP8266.lib")(options "")(descr ""))
+)
