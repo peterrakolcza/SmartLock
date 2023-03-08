@@ -54,12 +54,11 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 ## 🔌 Wiring diagram
 
-<h3 style="text-align: center;">⚠️ The wiring looks complicated, but it is not! With a little bit of knowledge, it is feasible. I recommend putting the circuit together one-by-one, so you can test every component. Designing a custom PCB would eliminate this issue... ⚠️</h3>
-
 ### **Things to keep in mind:**
 
 - Current sensor outputs 0-5V, however the ESP's analogue-to-digital converter expects 0-3.3V. Thus, it is neccessary to use a voltage divider.
-- Wiring diagram uses random digital ports, not the ones I defined in the code! Refer to the _default pins_ table.
+- Refer to the _default pins_ table.
+- *LED* pin supplies 3.3V, use a resistor or 3.3V LED ring.
 
 <br>
 
