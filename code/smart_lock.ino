@@ -6,15 +6,18 @@
 #include <Servo.h>
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+#include <RemoteDebug.h>
 
 int baseVersion = 0;
 int version = 1;
 
 #define CURRENT A0
-#define SERVOPIN 2
-#define SENSOR 0
+#define SERVOPIN 12
+#define SENSOR 13
 #define BUTTON 4
 #define RINGLED 5
+
+RemoteDebug Debug;
 
 Servo servo;
 
@@ -27,12 +30,12 @@ int counter = 0;
 //#############################################################################################################################################
 
 #ifndef STASSID
-#define STASSID "*******************" // CHANGE THIS
-#define STAPSK  "*******************" // CHANGE THIS
+#define STASSID "********" // CHANGE THIS
+#define STAPSK  "********" // CHANGE THIS
 #endif
 
 const int model = 2;   // enter the model number (see below)
-const int cutOff = 810;  // CHANGE THIS
+const int cutOff = 400;  // CHANGE THIS
 const int numberOfTurnsRequired = 3; // CHANGE THIS
 const int timeOutRequiredTurns = 30000; // CHANGE THIS
 const int timeOutServo = 4000; // CHANGE THIS
@@ -66,6 +69,7 @@ int readCurrent() {
     Serial.print(" Contact: ");
     Serial.print(digitalRead(SENSOR));
     Serial.println();*/
+  debugV("Current: %d", current);
   return current;
 }
 
@@ -284,9 +288,11 @@ void handleButton() {
     if (locked) {
       unlock();
       Serial.println("unlocked using the button");
+      debugV("unlocked");
     } else {
       lock();
       Serial.println("locked using the button");
+      debugV("locked");
     }
     delay(1000);
   }
@@ -356,6 +362,8 @@ void setup() {
   Serial.println("HTTP server started");
 
   initOTA();
+
+  Debug.begin("ESP");
 }
 
 void loop() {
@@ -364,4 +372,5 @@ void loop() {
   handleUpdateLockState();
   handleButton();
   handleLED();
+  Debug.handle();
 }
