@@ -52,7 +52,7 @@ git clone https://github.com/username/esp8266-smart-lock.git
 
 <br>
 
-## 🔌 Custom PCB
+## ⚡ Custom PCB
 
 Or you can just order my custom PCB assembled and flash the firmware. After that, connecting the sensors and servo using the header pins are easy.
 
