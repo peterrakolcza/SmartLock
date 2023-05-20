@@ -67,8 +67,8 @@ git clone https://github.com/username/esp8266-smart-lock.git
 | Pin on ESP | Pin in code |  Funcionality  |
 | :--------: | :---------: | :------------: |
 |     A0     |     A0      | Current sensor |
-|     D4     |      2      |  Servo signal  |
-|     D3     |      0      |  Reed sensor   |
+|     D6     |      12     |  Servo signal  |
+|     D7     |      13     |  Reed sensor   |
 |     D2     |      4      |     Button     |
 |     D1     |      5      |      LED       |
 
@@ -162,9 +162,6 @@ setTimeout(function () {
 ## 💡 Future ideas
 
 - Making the housing sturdier and more robust to reduce wiggle
-- Designing a custom PCB for easier installation
-- Adding hole for power
-- Adding hole for Reed-relay
 - Making a battery-powered version
 
 <br>
