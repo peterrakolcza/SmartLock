@@ -30,12 +30,12 @@ int counter = 0;
 //#############################################################################################################################################
 
 #ifndef STASSID
-#define STASSID "********" // CHANGE THIS
-#define STAPSK  "********" // CHANGE THIS
+#define STASSID "***************" // CHANGE THIS
+#define STAPSK  "***************" // CHANGE THIS
 #endif
 
-const int model = 2;   // enter the model number (see below)
-const int cutOff = 400;  // CHANGE THIS
+const int model = 0;   // enter the model number (see below)
+const int cutOff = 520;  // CHANGE THIS
 const int numberOfTurnsRequired = 3; // CHANGE THIS
 const int timeOutRequiredTurns = 30000; // CHANGE THIS
 const int timeOutServo = 4000; // CHANGE THIS
