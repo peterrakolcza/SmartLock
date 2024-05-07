@@ -105,7 +105,7 @@ Or you can just order my custom PCB assembled and flash the firmware. After that
 Example request to lock the door:
 
 ```bash
-curl -X POST http://your-ip-address -H "Content-Type: application/x-www-form-urlencoded" -d "state=locked"
+curl -X POST http://smartlock.local -H 'Content-Type: application/json' -d '{"state":"locked"}'
 ```
 
 Example request to get the current state:
