@@ -1,0 +1,5 @@
+HAP-python==4.9.*
+cryptography==41.0.*
+nfcpy==1.0.*
+cbor2==5.4.*
+requests==2.31.*

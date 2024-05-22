@@ -1,123 +1,90 @@
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
 #include <ArduinoJson.h>
 #include <Servo.h>
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
-#include <RemoteDebug.h>
+#include <ESP8266mDNS.h>
+#include <EEPROM.h>
 
-int baseVersion = 0;
-int version = 1;
+int baseVersion = 3;
+int version = 0;
 
-#define CURRENT A0
 #define SERVOPIN 12
 #define SENSOR 13
 #define BUTTON 4
 #define RINGLED 5
-
-RemoteDebug Debug;
 
 Servo servo;
 
 int counter = 0;
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             CONFIGURATION                                    ###
+//###                                                                   ###
+//###                             CONFIGURATION                         ###
 //###                                                                   ###
 //#############################################################################################################################################
 
 #ifndef STASSID
-#define STASSID "***************" // CHANGE THIS
-#define STAPSK  "***************" // CHANGE THIS
+#define STASSID "*****" // CHANGE THIS
+#define STAPSK  "*****" // CHANGE THIS
 #endif
 
-const int model = 0;   // enter the model number (see below)
-const int cutOff = 520;  // CHANGE THIS
-const int numberOfTurnsRequired = 3; // CHANGE THIS
-const int timeOutRequiredTurns = 30000; // CHANGE THIS
-const int timeOutServo = 4000; // CHANGE THIS
-const int minTimeToLock = 2500; // CHANGE THIS
-
-/*
-          "ACS712ELCTR-05B-T",// for model use 0
-          "ACS712ELCTR-20A-T",// for model use 1
-          "ACS712ELCTR-30A-T"// for model use 2
-  sensitivity array is holding the sensitivy of the  ACS712
-  current sensors. Do not change. All values are from page 5  of data sheet
-*/
-float sensitivity[] = {
-  0.185,// for ACS712ELCTR-05B-T
-  0.100,// for ACS712ELCTR-20A-T
-  0.066// for ACS712ELCTR-30A-T
-
-};
+struct { 
+  const int numberOfTurnsRequired = 2; // CHANGE THIS
+  // CALIBRATE
+  int TimeToLock = 1000;
+  int TimeToUnlock = 1000;
+} settings;
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             LOCK                                    ###
+//###                                                                   ###
+//###                             LOCK                                  ###
 //###                                                                   ###
 //#############################################################################################################################################
 bool locked = true;
-
-int readCurrent() {
-  int current = analogRead(CURRENT);
-  /*Serial.print("I: ");
-    Serial.print(current);
-    Serial.print(" Contact: ");
-    Serial.print(digitalRead(SENSOR));
-    Serial.println();*/
-  debugV("Current: %d", current);
-  return current;
-}
-
-void detachServo() {
-  int startTime = millis();
-  counter = 0;
-  delay(500);
-  while (true) {
-    if (readCurrent() < cutOff) {
-      delay(500);
-      if (readCurrent() < cutOff) {
-        servo.detach();
-        break;
-      }
-    }
-    else if (millis() - startTime > timeOutServo) {
-      servo.detach();
-      break;
-    }
-    delay(15);
-  }
-}
+bool lockingInProgress = false;
+bool unlockingInProgress = false;
+unsigned long lockUnlockStartTime = 0;
+unsigned long lastStateChangeTime = 0;
 
 void lock() {
-  int startTime;
-  if (!locked) {
-    startTime = millis();
+  if (!locked && !lockingInProgress) {
     servo.attach(SERVOPIN);
     servo.write(180);
-    detachServo();
+    lockUnlockStartTime = millis();
+    lockingInProgress = true;
   }
-
-  locked = true;
 }
 
 void unlock() {
-  if (locked) {
+  if (locked && !unlockingInProgress) {
     servo.attach(SERVOPIN);
     servo.write(1);
-    detachServo();
+    lockUnlockStartTime = millis();
+    unlockingInProgress = true;
   }
+}
 
-  locked = false;
+void handleLockUnlock() {
+  if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock) {
+    servo.detach();
+    locked = true;
+    lockingInProgress = false;
+    lastStateChangeTime = millis();
+    counter = 0;
+  }
+  
+  if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock) {
+    servo.detach();
+    locked = false;
+    unlockingInProgress = false;
+    lastStateChangeTime = millis();
+    counter = 0;
+  }
 }
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             WEBSERVER                                    ###
+//###                                                                   ###
+//###                             WEBSERVER                             ###
 //###                                                                   ###
 //#############################################################################################################################################
 
@@ -125,11 +92,6 @@ const char* ssid = STASSID;
 const char* password = STAPSK;
 
 ESP8266WebServer server(80);
-
-void writeHeaders() {
-  server.sendHeader("Cache-Control", "no-cache");
-  server.sendHeader("Version", "v" + String(baseVersion) + "." + String(version));
-}
 
 void handleNotFound() {
   String message = "File Not Found\n\n";
@@ -146,24 +108,16 @@ void handleNotFound() {
   server.send(404, "text/plain", message);
 }
 
-void handleDebug() {
-  String html = ESP.getResetReason();
-
-  writeHeaders();
-  server.send(200, "text/html", html);
-}
-
 void handleStatus() {
-  writeHeaders();
   char rsp[255];
-  sprintf(rsp, "{\"state\":\"%s\",\"statusCode\":200,\"battery\":100}", locked ? "locked" : "unlocked");
+  sprintf(rsp, "{\"state\":\"%s\"}", locked ? "locked" : "unlocked");
 
-  server.send(200, "text/plain", rsp);
+  server.send(200, "application/json", rsp);
 }
 
 void handleUpdate() {
-  StaticJsonBuffer<200> newBuffer;
-  JsonObject& newjson = newBuffer.parseObject(server.arg("plain"));
+  JsonDocument newjson;
+  DeserializationError error = deserializeJson(newjson, server.arg("plain"));
   String state = newjson["state"];
   if (state == "") {
     int args = server.args();
@@ -180,37 +134,50 @@ void handleUpdate() {
 
   Serial.println(state);
 
-  if (state != "") {
+  if (state != "null") {
     if (state == "locked") {
       lock();
-      handleStatus();
+      delay(settings.TimeToLock);
+
+      char rsp[255];
+      //sprintf(rsp, "{\"success\":\"%s\"}", locked ? "locked" : "unlocked");
+      sprintf(rsp, "{\"success\":\"true\"}");
+      server.send(200, "application/json", rsp);
     }
     else if (state == "unlocked") {
       unlock();
-      handleStatus();
+      delay(settings.TimeToUnlock);
+
+      char rsp[255];
+      //sprintf(rsp, "{\"success\":\"%s\"}", locked ? "locked" : "unlocked");
+      sprintf(rsp, "{\"success\":\"true\"}");
+      server.send(200, "application/json", rsp);
     }
 
-    writeHeaders();
-    server.send(500, "text/plain", "INVALID POST REQUEST");
+    server.send(400, "text/plain", "INVALID POST REQUEST");
   } else {
-    writeHeaders();
-    server.send(500, "text/plain", "EMPTY POST REQUEST");
+    server.send(400, "text/plain", "EMPTY POST REQUEST");
   }
 }
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                               SENSOR                                   ###
+//###                                                                   ###
+//###                               SENSOR                              ###
 //###                                                                   ###
 //#############################################################################################################################################
 
+bool previousStateWasHigh = true;
+
 void handleUpdateLockState() {
-  if (digitalRead(SENSOR) == LOW) {
+  if (digitalRead(SENSOR) == LOW && previousStateWasHigh) {
     counter++;
-    delay(1000);
+    previousStateWasHigh = false;
+    delay(500);
+  } else if (digitalRead(SENSOR) == HIGH) {
+    previousStateWasHigh = true;
   }
 
-  if (counter == numberOfTurnsRequired) {
+  if (counter == settings.numberOfTurnsRequired) {
     counter = 0;
     if (locked) {
       locked = false;
@@ -223,63 +190,8 @@ void handleUpdateLockState() {
 }
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                               OTA                                   ###
 //###                                                                   ###
-//#############################################################################################################################################
-
-void initOTA() {
-  // Port defaults to 8266
-  // ArduinoOTA.setPort(8266);
-
-  // Hostname defaults to esp8266-[ChipID]
-  ArduinoOTA.setHostname("smartlock");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword("admin");
-
-  // Password can be set with it's md5 value as well
-  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
-  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
-
-  ArduinoOTA.onStart([]() {
-    String type;
-    if (ArduinoOTA.getCommand() == U_FLASH) {
-      type = "sketch";
-    } else { // U_FS
-      type = "filesystem";
-    }
-
-    // NOTE: if updating FS this would be the place to unmount FS using FS.end()
-    Serial.println("Start updating " + type);
-  });
-  ArduinoOTA.onEnd([]() {
-    Serial.println("\nEnd");
-  });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    Serial.printf("Progress: %u%%\r", (progress / (total / 100)));
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("Error[%u]: ", error);
-    if (error == OTA_AUTH_ERROR) {
-      Serial.println("Auth Failed");
-    } else if (error == OTA_BEGIN_ERROR) {
-      Serial.println("Begin Failed");
-    } else if (error == OTA_CONNECT_ERROR) {
-      Serial.println("Connect Failed");
-    } else if (error == OTA_RECEIVE_ERROR) {
-      Serial.println("Receive Failed");
-    } else if (error == OTA_END_ERROR) {
-      Serial.println("End Failed");
-    }
-  });
-  ArduinoOTA.begin();
-  Serial.println("OTA Ready");
-}
-
-//#############################################################################################################################################
-//###                                                                    ###
-//###                             BUTTON                                    ###
+//###                             BUTTON                                ###
 //###                                                                   ###
 //#############################################################################################################################################
 
@@ -288,19 +200,17 @@ void handleButton() {
     if (locked) {
       unlock();
       Serial.println("unlocked using the button");
-      debugV("unlocked");
     } else {
       lock();
       Serial.println("locked using the button");
-      debugV("locked");
     }
     delay(1000);
   }
 }
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             WIFI                                    ###
+//###                                                                   ###
+//###                             WIFI                                  ###
 //###                                                                   ###
 //#############################################################################################################################################
 
@@ -319,15 +229,11 @@ void initWifi() {
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
-
-  if (MDNS.begin("smartlock")) {
-    Serial.println("MDNS responder started");
-  }
 }
 
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             LED                                    ###
+//###                                                                   ###
+//###                             LED                                   ###
 //###                                                                   ###
 //#############################################################################################################################################
 
@@ -339,9 +245,65 @@ void handleLED() {
   }
 }
 
+void flashLED() {
+  digitalWrite(RINGLED, HIGH);
+  delay(500);
+  digitalWrite(RINGLED, LOW);
+  delay(500);
+  digitalWrite(RINGLED, HIGH);
+  delay(500);
+  digitalWrite(RINGLED, LOW);
+  delay(500);
+  digitalWrite(RINGLED, HIGH);
+  delay(500);
+  digitalWrite(RINGLED, LOW);
+}
+
 //#############################################################################################################################################
-//###                                                                    ###
-//###                             MAIN                                    ###
+//###                                                                   ###
+//###                             CALIBRATION                           ###
+//###                                                                   ###
+//#############################################################################################################################################
+
+void calibrate() {
+  Serial.println("Starting calibration...");
+  flashLED();
+
+  while (digitalRead(BUTTON) == LOW) {
+    delay(50);
+  }
+
+  int startTime = millis();
+  servo.attach(SERVOPIN);
+  servo.write(180);
+  while (digitalRead(BUTTON) == HIGH) {
+    delay(50);
+  }
+  servo.detach();
+  settings.TimeToLock = millis() - startTime - 1000;
+  Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
+
+  flashLED();
+
+  startTime = millis();
+  servo.attach(SERVOPIN);
+  servo.write(1);
+  while (digitalRead(BUTTON) == HIGH) {
+    delay(50);
+  }
+  servo.detach();
+  settings.TimeToUnlock = millis() - startTime - 1000;
+  Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
+
+  EEPROM.put(0, settings); //write data to array in ram 
+  EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
+  
+  flashLED();
+}
+
+//#############################################################################################################################################
+//###                                                                   ###
+//###                             MAIN                                  ###
 //###                                                                   ###
 //#############################################################################################################################################
 
@@ -355,22 +317,31 @@ void setup() {
 
   server.on("/", HTTP_GET, handleStatus);
   server.on("/", HTTP_POST, handleUpdate);
-  server.on("/debug", HTTP_GET, handleDebug);
   server.onNotFound(handleNotFound);
 
   server.begin();
   Serial.println("HTTP server started");
 
-  initOTA();
+  if (MDNS.begin("smartlock")) {
+    Serial.println("MDNS responder started");
+  }
 
-  Debug.begin("ESP");
+  EEPROM.begin(sizeof(settings));
+  EEPROM.get(0, settings); //read data from array in ram and cast it into struct called settings
+  Serial.println("Current lock time: " + String(settings.TimeToLock) + " ms");
+  Serial.println("Current unlock time: " + String(settings.TimeToUnlock) + " ms");
+
+  delay(3000);
+  if (digitalRead(BUTTON) == LOW) {
+    calibrate();
+  }
 }
 
 void loop() {
-  ArduinoOTA.handle();
+  MDNS.update();
   server.handleClient();
-  handleUpdateLockState();
-  handleButton();
+  handleLockUnlock();
+  if (!lockingInProgress && !unlockingInProgress && millis() - lastStateChangeTime >= 2000) handleUpdateLockState();
+  if (!lockingInProgress && !unlockingInProgress) handleButton();
   handleLED();
-  Debug.handle();
 }

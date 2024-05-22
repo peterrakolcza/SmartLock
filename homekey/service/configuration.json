@@ -1,0 +1,24 @@
+{
+    "logging": {
+        "level": 20
+    },
+
+    "nfc": {
+        "port": "usbserial-0001", 
+        "driver": "pn532",
+        "broadcast": true
+    },
+
+    "hap": {
+        "port": 51926,
+        "persist": "hap.state",
+        "default": "locked"
+    },
+
+    "homekey": {
+        "persist": "homekey.json",
+        "express": true,
+        "finish": "silver",
+        "flow": "fast"
+    }
+}
