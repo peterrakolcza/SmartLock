@@ -1,3 +1,5 @@
+# UPDATED DOCUMENTATION IS COMING FOR THE NEW (V3) VERSION!!!
+
 # 🔒 Smart Lock 🔒
 
 <img src="https://freesvg.org/img/1543428916.png" align="right" height="220">
