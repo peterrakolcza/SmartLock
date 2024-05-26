@@ -86,7 +86,7 @@ You can just order my custom PCB assembled and flash the firmware. After that, c
 
 <br>
 
-<img src="images/ESP8266-Pinout.png" align=right height="400px">
+<img src="images/ESP8266-Pinout.png" align=right height="350px">
 
 | Pin on ESP | Pin in code |  Funcionality  |
 | :--------: | :---------: | :------------: |
