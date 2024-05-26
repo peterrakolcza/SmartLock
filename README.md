@@ -27,7 +27,7 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 
 |                Inspiration - hackaday.io                |                    Latest version               |
 | :-----------------------------------------------------: | :---------------------------------------------: |
-| <img src="images/hackaday_cropped.jpeg" height=400px /> | <img src="images/latest_version.jpeg" height=400px /> <img src="images/homekey.jpeg" height=400px /> |
+| <img src="images/hackaday_cropped.jpeg" height=400px /> | <img src="images/latest_version.JPEG" height=300px /> <img src="images/homekey.JPEG" height=300px /> |
 
 <br>
 
