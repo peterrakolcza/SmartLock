@@ -4,7 +4,7 @@
 
 A smart lock built using ESP8266, an affordable microcontroller with WiFi capabilities, that can be controlled through a mobile app or web interface.
 
-## Features
+### Features
 
 - 📱 Remote control of lock through app or web interface
 - 🔐 Smart home integration like Homebridge.
