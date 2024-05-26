@@ -1,6 +1,4 @@
-# UPDATED DOCUMENTATION IS COMING FOR THE NEW (V3) VERSION!!!
-
-# 🔒 Smart Lock 🔒
+# 🔒 Smart Lock with Home Key support🔒
 
 <img src="https://freesvg.org/img/1543428916.png" align="right" height="220">
 
@@ -11,8 +9,10 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 - 📱 Remote control of lock through app or web interface
 - 🔐 Smart home integration like Homebridge.
 - 🕰️ Real-time status updates
-- 📈 Event log to track lock activity
+- 💳 Optional Home Key support
 - 🔨 Easy installation, compatible with most standard locks
+
+<br>
 
 ## 💭 Inspiration
 
@@ -25,9 +25,9 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 - No modifications on door itself. I am a tenant at this apartment right now so I can't modify anything that can't be fixed.
 - It should be secure. Most of the RF devices are vulnerable to replay attacks, the lock should be safe enough.
 
-|                Inspiration - hackaday.io                |                    Version 1                    |
+|                Inspiration - hackaday.io                |                    Latest version               |
 | :-----------------------------------------------------: | :---------------------------------------------: |
-| <img src="images/hackaday_cropped.jpeg" height=400px /> | <img src="images/final_V1.jpeg" height=400px /> |
+| <img src="images/hackaday_cropped.jpeg" height=400px /> | <img src="images/latest_version.jpeg" height=400px /> <img src="images/homekey.jpeg" height=400px /> |
 
 <br>
 
@@ -36,69 +36,86 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 1. Clone the repository to your local machine.
 
 ```bash
-git clone https://github.com/username/esp8266-smart-lock.git
+git clone https://github.com/peterrakolcza/SmartLock.git
 ```
 
-2. Choose the correct wall mount for your lock type
+2. 3D print the selected models
+3. Order the custom PCB and the components from JLCPCB for example
+4. Wait :(
+5. Configure the parameters in the code
+```
+#ifndef STASSID
+#define STASSID "*****" // CHANGE THIS
+#define STAPSK  "*****" // CHANGE THIS
+#endif
 
-|               Screws on the top and bottom               |                    Screws on the sides                    |
-| :------------------------------------------------------: | :-------------------------------------------------------: |
-| <img src="images/supported_wall_mount.png" height="390"> | <img src="images/screws_top_and_bottom.png" height="390"> |
-
-3. 3D print the selected models
-4. Connect to components using the [Wiring diagram](#wiring-diagram)
-5. Test each component one-by-one
-6. Configure the parameters in the code
-7. Flash the firmware
-8. Assemble the whole lock
+struct { 
+  const int numberOfTurnsRequired = 2; // CHANGE THIS
+  // CALIBRATE
+  int TimeToLock = 1000;
+  int TimeToUnlock = 1000;
+} settings;
+```
+6. Flash the firmware
+7. Assemble the whole lock
+8. Calibration: 
+     -  it is highly recommended to calibrate the smart lock at first boot by holding down side-button while powering it on. 
+     - Before the calibration it will flash 3 times. 
+     - After that it will try to lock the door until the user presses the side-button. 
+     - It will flash 3 times again. 
+     - Finally, it will try to unlock the door until the button is pressed. 
+     - It will flash 3 times to indicate the end of the calibration process.
+     - The smart lock now registered and saved the amount of time required to lock / unlock the door.
+9. Integrate it into your existing smart home ecosystem using the API function or Homebrige with / without Home Key support
 
 <br>
 
 ## ⚡ Custom PCB
 
-Or you can just order my custom PCB assembled and flash the firmware. After that, connecting the sensors and servo using the header pins are easy.
-
-<img src="images/easyeda.jpg">
+You can just order my custom PCB assembled and flash the firmware. After that, connecting the sensors and servo using the header pins are easy.
 
 <br>
 
-## 🔌 Wiring diagram
-
-### **Things to keep in mind:**
-
-- Current sensor outputs 0-5V, however the ESP's analogue-to-digital converter expects 0-3.3V. Thus, it is neccessary to use a voltage divider.
-- Refer to the _default pins_ table.
-- *LED* pin supplies 3.3V, use a resistor or 3.3V LED ring.
+|                easyEDA                |                     PCB               |
+| :-----------------------------------------------------: | :---------------------------------------------: |
+| <img src="images/pcb.jpg" height="550px">               | <img src="images/pcb2.JPEG" height="550px">     |
 
 <br>
 
-<img src="images/ESP8266-Pinout.png" align=right height="250px">
+## 🔌 Pinout
+
+<br>
+
+<img src="images/ESP8266-Pinout.png" align=right height="400px">
 
 | Pin on ESP | Pin in code |  Funcionality  |
 | :--------: | :---------: | :------------: |
-|     A0     |     A0      | Current sensor |
 |     D6     |      12     |  Servo signal  |
 |     D7     |      13     |  Reed sensor   |
 |     D2     |      4      |     Button     |
 |     D1     |      5      |      LED       |
 
 <br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+<br>
+
+## ⚠️ **Limitations**
+
+A lift-up handle on a smart lock can introduce several challenges that affect usability, compatibility, and security. One primary issue is user convenience. The necessity to lift the handle adds an extra step to the process of locking or unlocking the door, which can be particularly inconvenient when users' hands are full, they are in a hurry, or when it's dark. This could prevent the smart lock to properly lock the door.
+
+_A future feature is planned to solve this issue, by automatically falling back to unlocked state when locking failed._
 
 <br>
 
-## ⚠️ **Worth noting**
-
-- Disable the firewall on your machine when trying to OTA update. It might cause problems.
-- Added a feature to automatically fallback to unlocked state when locking timed out (configure the time in the code). This could be useful for _lift-up handle_ locks. (EXPERIMENTAL)
-  <img src="images/Lift-Up-Handle-Animation-2.gif" >
-
-<br>
-
-## 🔴 Optional features
-
-- **Autolock:** it is possible to disable this feature or add bigger time delay
-- **Sensor:** it is possible to add a Reel-relay making it possible to track the lock's state even opening/closing it in manual mode. See the source code for details. _However, if you decide not to use it, you do not have to change anything to get the lock working._
-- **Button:** it enables the user to open or close the door from the inside manually without using the phone.
+<img src="images/Lift-Up-Handle-Animation-2.gif" height=500px />
 
 <br>
 
@@ -113,16 +130,14 @@ curl -X POST http://smartlock.local -H 'Content-Type: application/json' -d '{"st
 Example request to get the current state:
 
 ```bash
-curl -X GET http://your-ip-address
+curl -X GET http://smartlock.local
 ```
 
 Example response:
 
 ```json
 {
-  "state": "locked",
-  "statusCode": 200,
-  "battery": 100
+  "state": "locked"
 }
 ```
 
@@ -138,6 +153,37 @@ Example response:
 
 Homebridge allows you to integrate with smart home devices that do not natively support HomeKit. There are over 2,000 Homebridge plugins supporting thousands of different smart accessories.
 
+Homebridge is a lightweight Node.js server you can run on your home network that emulates the iOS HomeKit API. It supports Plugins, which are community-contributed modules that provide a basic bridge from HomeKit to various 3rd-party APIs provided by manufacturers of "smart home" devices.
+
+You have 2 options to integrate the smart lock to your existing Apple HomeKit smart home:
+
+### - **Home Key**
+
+<img src="images/homekey_card.JPEG" height=350  align="right">
+
+
+This all made possible by this project: [apple-home-key-reader](https://github.com/kormax/apple-home-key-reader) , thanks to [kormax](https://github.com/kormax). Furthermore, thanks for [nagolnad](https://github.com/nagolnad) for a [OrangePi Zero 2W Implementation](https://github.com/kormax/apple-home-key-reader/discussions/14) which was a great starting point!
+
+Their project offers a demonstration of an Apple Home Key Reader built in Python. It includes:
+
+- Fully functional Apple Home Key NFC authentication;
+- NFC Express mode support;
+- HAP configuration (as a virtual lock)
+
+It's intended for makers and developers interested in building practical and user-friendly applications using this example.
+
+To add Home Key support to this smart lock:
+1. 3D print the case included in the repository
+2. follow this guide: [OrangePi Zero 2W Implementation](https://github.com/kormax/apple-home-key-reader/discussions/14)
+3. use the modified code included in the repository to make it compatible with this lock 
+
+<br>
+<br>
+<br>
+<br>
+
+### - **EspLock**
+
 The lock uses the [EspLock](https://github.com/volca/homebridge-esplock) Homebridge plugin to integrate it into the Apple HomeKit ecosystem. Huge thanks to [volca](https://github.com/volca)!
 
 Example configuration, it is possible to use a static IP address or the hostname:
@@ -148,7 +194,7 @@ Example configuration, it is possible to use a static IP address or the hostname
     {
       "accessory": "EspLock",
       "name": "Front Door",
-      "url": "your-locks-ip-address-or-hostname"
+      "url": "http://smartlock.local"
     }
   ]
 }
@@ -166,13 +212,6 @@ setTimeout(function () {
   }
 }, 5000);
 ```
-
-<br>
-
-## 💡 Future ideas
-
-- Making the housing sturdier and more robust to reduce wiggle
-- Making a battery-powered version
 
 <br>
 
