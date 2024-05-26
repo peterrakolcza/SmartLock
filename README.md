@@ -103,9 +103,6 @@ You can just order my custom PCB assembled and flash the firmware. After that, c
 <br>
 <br>
 <br>
-<br>
-<br>
-<br>
 
 ## ⚠️ **Limitations**
 
@@ -157,7 +154,7 @@ Homebridge is a lightweight Node.js server you can run on your home network that
 
 You have 2 options to integrate the smart lock to your existing Apple HomeKit smart home:
 
-### - **Home Key**
+### Home Key
 
 <img src="images/homekey_card.JPEG" height=350  align="right">
 
@@ -178,11 +175,8 @@ To add Home Key support to this smart lock:
 3. use the modified code included in the repository to make it compatible with this lock 
 
 <br>
-<br>
-<br>
-<br>
 
-### - **EspLock**
+### EspLock
 
 The lock uses the [EspLock](https://github.com/volca/homebridge-esplock) Homebridge plugin to integrate it into the Apple HomeKit ecosystem. Huge thanks to [volca](https://github.com/volca)!
 
