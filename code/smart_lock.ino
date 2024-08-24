@@ -6,7 +6,6 @@
 #include <EEPROM.h>
 
 int baseVersion = 3;
-int version = 0;
 
 #define SERVOPIN 12
 #define SENSOR 13
@@ -24,12 +23,14 @@ int counter = 0;
 //#############################################################################################################################################
 
 #ifndef STASSID
-#define STASSID "*****" // CHANGE THIS
-#define STAPSK  "*****" // CHANGE THIS
+#define STASSID "*************" // CHANGE THIS
+#define STAPSK  "*************" // CHANGE THIS
 #endif
 
+const int numberOfTurnsRequired = 1; // CHANGE THIS
+bool previousStateWasHigh = true;
+
 struct { 
-  const int numberOfTurnsRequired = 2; // CHANGE THIS
   // CALIBRATE
   int TimeToLock = 1000;
   int TimeToUnlock = 1000;
@@ -44,7 +45,6 @@ bool locked = true;
 bool lockingInProgress = false;
 bool unlockingInProgress = false;
 unsigned long lockUnlockStartTime = 0;
-unsigned long lastStateChangeTime = 0;
 
 void lock() {
   if (!locked && !lockingInProgress) {
@@ -68,17 +68,24 @@ void handleLockUnlock() {
   if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock) {
     servo.detach();
     locked = true;
-    lockingInProgress = false;
-    lastStateChangeTime = millis();
+
+    // Completed the unlock, reset every state related variable
     counter = 0;
+    previousStateWasHigh = false;
+    
+    
+    if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock + 1000) lockingInProgress = false;
   }
   
   if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock) {
     servo.detach();
     locked = false;
-    unlockingInProgress = false;
-    lastStateChangeTime = millis();
+
+    // Completed the unlock, reset every state related variable
     counter = 0;
+    previousStateWasHigh = false;
+    
+    if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock + 1000) unlockingInProgress = false;
   }
 }
 
@@ -136,22 +143,31 @@ void handleUpdate() {
 
   if (state != "null") {
     if (state == "locked") {
-      lock();
-      delay(settings.TimeToLock);
+      if (!locked) {
+        lock();
 
-      char rsp[255];
-      //sprintf(rsp, "{\"success\":\"%s\"}", locked ? "locked" : "unlocked");
-      sprintf(rsp, "{\"success\":\"true\"}");
-      server.send(200, "application/json", rsp);
+        char rsp[255];
+        sprintf(rsp, "{\"success\":\"true\"}");
+        server.send(200, "application/json", rsp);
+      } else {
+        char rsp[255];
+        sprintf(rsp, "{\"success\":\"false\",\"error\":\"already locked\"}");
+        server.send(200, "application/json", rsp);
+      }
     }
     else if (state == "unlocked") {
-      unlock();
-      delay(settings.TimeToUnlock);
+      if (locked) {
+        unlock();
 
-      char rsp[255];
-      //sprintf(rsp, "{\"success\":\"%s\"}", locked ? "locked" : "unlocked");
-      sprintf(rsp, "{\"success\":\"true\"}");
-      server.send(200, "application/json", rsp);
+        char rsp[255];
+        sprintf(rsp, "{\"success\":\"true\"}");
+        server.send(200, "application/json", rsp);
+      } else {
+        char rsp[255];
+        sprintf(rsp, "{\"success\":\"false\",\"error\":\"already unlocked\"}");
+        server.send(200, "application/json", rsp);
+      }
+      
     }
 
     server.send(400, "text/plain", "INVALID POST REQUEST");
@@ -166,8 +182,6 @@ void handleUpdate() {
 //###                                                                   ###
 //#############################################################################################################################################
 
-bool previousStateWasHigh = true;
-
 void handleUpdateLockState() {
   if (digitalRead(SENSOR) == LOW && previousStateWasHigh) {
     counter++;
@@ -177,7 +191,7 @@ void handleUpdateLockState() {
     previousStateWasHigh = true;
   }
 
-  if (counter == settings.numberOfTurnsRequired) {
+  if (counter == numberOfTurnsRequired) {
     counter = 0;
     if (locked) {
       locked = false;
@@ -204,7 +218,7 @@ void handleButton() {
       lock();
       Serial.println("locked using the button");
     }
-    delay(1000);
+    delay(500);
   }
 }
 
@@ -281,7 +295,11 @@ void calibrate() {
   }
   servo.detach();
   settings.TimeToLock = millis() - startTime - 1000;
-  Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
+  if (settings.TimeToLock >= 1 && settings.TimeToLock <= 10) Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
+  else {
+    settings.TimeToLock = 5000;
+    Serial.println("Invalid lock time, resetting back to default: 5000 ms");
+  }
 
   flashLED();
 
@@ -293,7 +311,11 @@ void calibrate() {
   }
   servo.detach();
   settings.TimeToUnlock = millis() - startTime - 1000;
-  Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
+  if (settings.TimeToUnlock >= 1 && settings.TimeToUnlock <= 10) Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
+  else {
+    settings.TimeToUnlock = 5000;
+    Serial.println("Invalid unlock time, resetting back to default: 5000 ms");
+  }
 
   EEPROM.put(0, settings); //write data to array in ram 
   EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
@@ -339,9 +361,11 @@ void setup() {
 
 void loop() {
   MDNS.update();
-  server.handleClient();
   handleLockUnlock();
-  if (!lockingInProgress && !unlockingInProgress && millis() - lastStateChangeTime >= 2000) handleUpdateLockState();
-  if (!lockingInProgress && !unlockingInProgress) handleButton();
+  if (!lockingInProgress && !unlockingInProgress) {
+    server.handleClient();
+    handleUpdateLockState();
+    handleButton();
+  }
   handleLED();
 }

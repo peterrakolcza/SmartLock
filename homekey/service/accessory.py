@@ -10,7 +10,7 @@ import json
 
 log = logging.getLogger()
 
-url = "http://smartlock.local"
+url = "http://192.168.1.34"
 headers = {'Content-Type': 'application/json'}
 
 version = "3.0"
@@ -117,12 +117,10 @@ class Lock(Accessory):
             return
         self._last_client_public_keys = client_public_keys
         self.service.update_hap_pairings(client_public_keys)
-
-    def get_lock_current_state(self):
-        log.info("get_lock_current_state")
-
+    
+    def get_current_state_from_lock(self):
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=2)
             json_data = json.loads(response.text)
 
             
@@ -137,30 +135,18 @@ class Lock(Accessory):
             self.lock_current_state.set_value(self._lock_current_state, should_notify=True)
         except:
             log.info("A network exception occurred when polling the current state")
+
+    def get_lock_current_state(self):
+        log.info("get_lock_current_state")
+        self.get_current_state_from_lock()
 
         return self._lock_current_state
     
     # periodically poll device status
-    @Accessory.run_at_interval(60)
+    @Accessory.run_at_interval(10)
     def run(self):
         log.info("polling lock current state")
-
-        try:
-            response = requests.get(url)
-            json_data = json.loads(response.text)
-
-            
-            if json_data["state"] == "locked":
-                self._lock_current_state = 1
-                self._lock_target_state = 1
-            else:
-                self._lock_current_state = 0
-                self._lock_target_state = 0
-
-            self.lock_target_state.set_value(self._lock_target_state)
-            self.lock_current_state.set_value(self._lock_current_state, should_notify=True)
-        except:
-            log.info("A network exception occurred when polling the current state")
+        self.get_current_state_from_lock()
 
     def get_lock_target_state(self):
         log.info("get_lock_target_state")
@@ -168,7 +154,7 @@ class Lock(Accessory):
 
     def set_lock_target_state(self, value):
         log.info(f"set_lock_target_state {value}")
-
+        
         target_state_backup = self._lock_target_state
         try:
             self._lock_target_state = value
@@ -179,8 +165,7 @@ class Lock(Accessory):
                 new_state = "locked"
             else:
                 new_state = "unlocked"
-            #needs error handling
-            response = requests.post(url, json={"state": new_state}, headers=headers)
+            response = requests.post(url, json={"state": new_state}, headers=headers, timeout=3)
             
             self._lock_current_state = value
             self.lock_current_state.set_value(self._lock_current_state, should_notify=True)
