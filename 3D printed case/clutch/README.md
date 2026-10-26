@@ -1,72 +1,148 @@
-# 🔓 Servo clutch: use the key without fighting the servo
+# 🔓 Compact clutch lock
 
-In the original design the servo horn is screwed straight to the thumb-turn adapter. Turning the key from outside, or the thumb-turn by hand, means back-driving the servo's ~1:300 gearbox. That is hard work and wears the gears.
-
-The clutch decouples them. A small dog clutch sits between the servo and the thumb-turn, and a second micro servo (SG90, ~1.5 €) closes it **only while the lock is moving**. The rest of the time the thumb-turn spins freely, any number of turns in either direction, so it works with euro cylinders that need full 360° key turns.
+A complete case for the smart lock with a **servo clutch**, built around the **unchanged V3 PCB**. In the original design the servo horn is screwed straight to the thumb-turn, so turning the key by hand means back-driving the servo's ~1:300 gearbox. Here a dog clutch sits between them, and a small SG90 servo closes it **only while the lock is moving**. The rest of the time the key and the thumb-turn turn freely, any number of turns, in either direction.
 
 ![how the clutch works](../../images/clutch_operation.gif)
 
-![clutch assembly](../../images/clutch_render.png)
+![compact clutch lock, cut open](../../images/lock_cutaway.png)
 
-![clutch open and closed, cut through the middle](../../images/clutch_section.png)
+| | Original (no clutch) | First clutch version | **Compact clutch** |
+| :-- | :-: | :-: | :-: |
+| Size (diameter × height from the door) | 87 × 73 mm | 87 × 95 mm | **82 × 90 mm** |
+| Printed case parts | 2 + diffuser | 2 + ring + 5 clutch parts | **8 + diffuser** |
+| PCB | V3 | V3 | V3, unchanged |
 
-![exploded view](../../images/clutch_exploded.png)
+![size comparison](../../images/size_comparison.png)
 
-| Part | Print | Notes |
+The height depends on how far your thumb-turn sticks out (here 23.5 mm, see below). Most of the gain over the first clutch version comes from four changes:
+
+- **Merged case:** a single shell replaces `bottom` + `middle` + the extension ring.
+- **Shorter slider:** it rides on the *outside* of the hub (a hex prism) instead of on a separate shaft.
+- **No separate dog flange:** the slots are cut into the adapter's own top, and its floor is thinner.
+- **SG90 beside the clutch:** it hangs next to the clutch rather than adding height.
+
+## Parts
+
+| File | Print orientation (as exported) | What it does |
 | :-- | :-- | :-- |
-| `knob_adapter_clutch.stl` | as exported, flange down | the original thumb-turn adapter with its horn pocket filled and a 6-slot dog flange added |
-| `clutch_hub.stl` | disc down | screws to the servo horn, hex shaft + centring pin |
-| `clutch_slider.stl` | as exported | slides on the hex, 6 dog teeth, groove for the fork |
-| `clutch_fork.stl` | flat | ring yoke, two pins ride in the slider groove |
-| `clutch_bracket.stl` | as exported | slips over the main servo body (standard 40 × 20 mm), holds the SG90 and the fork pivot |
-| `extension_ring.stl` | flat | spacer between `bottom` and `middle`: the servo sits ~22 mm further out now |
+| `shell.stl` | floor down | The case. It keeps the original floor and door tab, and adds bosses for the chassis, ledges for the PCB, the USB opening and a **flexure side button** (a tongue in the wall that presses the PCB's switch). |
+| `knob_adapter.stl` | slotted top down | The original thumb-turn pocket, a thinner floor, 6 chamfered dog slots, and a magnet hole. |
+| `hub.stl` | top down | Hex prism. The straight servo horn sits in its top. |
+| `slider.stl` | top flange down | 6 chamfered dog teeth and a groove for the fork. It slides 3.5 mm on the hub. |
+| `fork.stl` | flat | Ring yoke whose pins ride in the slider groove. It pivots on the SG90 shaft and an M3 screw. |
+| `chassis.stl` | plate down | Plate the main servo hangs from by its tabs, with a window for the SG90, the fork ear and the reed sensor holder. |
+| `sg90_clip.stl` | on its side | Bridge over the SG90 window. The SG90's top tab screws to it. |
+| `cap.stl` | outside down | Holds the PCB down. The original `cover_led.stl` diffuser drops into its window. |
 
-PETG is recommended for the hub, slider and adapter. Use 4 walls and 40 % infill.
+Use PETG for the hub, slider, fork and adapter, and PETG or PLA for the rest, with 0.2 mm layers and 3-4 walls. Nothing needs supports. The only bridges are the slider groove and a few holes.
 
-**Hardware:** SG90 micro servo, 1 × M3 × 12 screw (fork pivot), 2 × M2 self-tapping screws (horn to hub), 1 × M2 self-tapping screw (SG90 horn to fork), a dab of grease on the hex and the groove.
+**Hardware:**
+- MG996R (or another standard-size) servo plus its straight horn
+- SG90 micro servo
+- Reed switch (2.5 × 14 mm glass) and a 5 mm magnet
+- Screws:
+  - 4 × M2.5 for the servo tabs
+  - 3 × M3 × 8 self-tapping for the chassis
+  - 1 × M3 × 12 as the fork pivot
+  - 2 × M2 × 6 for the SG90 clip
+  - 1 × M2 for the SG90 tab
+  - 4 × M2 × 12 self-tapping to fix the horn to the hub
+  - 1 × M2 to fix the SG90 horn to the fork
+- A dab of grease
+
+## Measure your door first
+
+```python
+THUMBTURN_HEIGHT = 23.5   # lock.py: from the escutcheon (where the floor sits) to the top of the thumb-turn
+```
+
+Everything above the adapter is positioned from this number. Measure it within about ±0.5 mm and set it in `lock.py`, then regenerate (see below). The adapter's pocket is the original one, so it fits the same thumb-turn as before.
 
 ## Assembly
 
-1. Shorten the main servo's straight horn to **30 mm** total length so it fits the hub's slot. Screw the hub to it with two M2 screws through the horn holes. The hub has pilot holes at 7.5 mm and 11 mm, so drill to match your horn.
-2. Slide the bracket band over the output end of the main servo. The SG90 cradle goes on the side where the output shaft is **closest** to the end of the servo body. Secure it with a drop of CA glue.
-3. Put the slider on the hub's hex, teeth facing away from the servo.
-4. Push the SG90 into its cradle, shaft facing the same way as the main servo's shaft, and screw its top tab to the bracket.
-5. Cut the SG90's single-arm horn to fit the pocket in the fork's +x arm and screw it to the fork. Fit the fork's pins into the slider groove, press the horn onto the SG90 spline, and put the M3 screw through the bracket ear into the fork's other arm (the fork pivots on it, so don't overtighten).
-6. Print `extension_ring.stl` and put it between the `bottom` and `middle` parts.
-7. Wiring:
-   * **V3 board (USB):** SG90 signal goes to the **RX pin of the programming header** (GPIO3; the firmware switches Serial to TX only). SG90 + and − connect to the main servo's + and − (a Y cable or a soldered splice).
+1. **Shell:** screw it to the door through the tab, as before.
+2. **Adapter:** put the magnet in the adapter and push the adapter onto the thumb-turn. In the home position (where the key goes in and out) the magnet must point **up**, towards the door tab, so that it passes under the reed sensor.
+3. **Servo:**
+   - Cut the straight horn to **22 mm**, put it on the main servo and fix it with its centre screw.
+   - Put the hub over the horn and screw it on from below with the four M2 self-tappers. Drill the pilot holes to match your horn.
+   - Put the slider on the hub, teeth facing away from the servo.
+   - Push the servo down through the chassis window and screw its tabs to the plate.
+4. **SG90 and fork:**
+   - Cut off the SG90's lower mounting tab.
+   - Push the SG90 up through the window in the plate, shaft on the +x side, and screw its top tab to `sg90_clip`.
+   - Screw the clip to the plate.
+   - Screw the SG90's single-arm horn into the fork's +x arm and fit the fork pins into the slider groove.
+   - Press the horn onto the SG90, then put the M3 pivot screw through the chassis ear into the fork's -x arm. The fork turns on this screw, so don't overtighten it.
+5. **Reed:** press the reed switch into the holder on the chassis.
+6. **Wiring:**
+   - Route the servo, SG90 and reed wires up through the slots in the plate.
+   - Clip the PCB's header pins short (to ~2 mm above the plastic) and solder the wires onto them.
+   - The SG90 signal goes to the programming header's **RX pin** (GPIO3). SG90 + and − go to the servo's + and −.
+7. **Into the case:** lower the chassis module into the shell and screw it to the three bosses.
+8. **PCB:** lay the PCB on its ledges, with the USB socket facing the opening.
+9. **Cap:** drop the diffuser into the cap and snap the cap on.
+
+The PCB, the chassis module and the cap all go straight down the bore. The CAD checks this.
 
 ## Setting the clutch angles
 
-In `smart_lock.ino`:
+In `code/smart_lock/smart_lock.ino`:
 
 ```cpp
 #define USE_CLUTCH 1
-#define CLUTCH_OPEN_ANGLE 75     // fork lifted, dogs apart
-#define CLUTCH_CLOSED_ANGLE 105  // fork pressed down, a few degrees past contact
+#define CLUTCH_OPEN_ANGLE 75     // fork up, teeth out of the slots
+#define CLUTCH_CLOSED_ANGLE 105  // fork down, a few degrees past contact so the SG90 keeps pushing
 ```
 
-Depending on which way your SG90 is mounted, the two angles may be swapped. Check with the thumb-turn:
+Swap the two angles if your SG90 is mounted the other way round. These are the only settings. The number of turns is learned on the first lock and the first unlock, as described in step 8 of the main README.
 
-* **Open:** the thumb-turn turns freely all the way round.
-* **Closed:** the slider's teeth are fully in the adapter's slots. Go a few degrees past the point where they bottom out, so the SG90 keeps pushing.
-
-That's the only setting. The lock / unlock movement itself learns the number of turns on its own, see step 8 of the main README.
-
-A movement runs: close the clutch (350 ms) → turn until the reed sensor has seen the magnet the learned number of times → reverse the servo for 40 ms to unload the teeth → open the clutch.
+A movement goes:
+1. close the clutch (350 ms)
+2. turn until the reed sensor has seen the magnet the learned number of times
+3. reverse for 40 ms to unload the teeth
+4. open the clutch
 
 ## When the teeth don't line up
 
-After the key has been used, the thumb-turn can stop at any angle, so the teeth usually won't be over the slots. They only drop all the way in within ±4° of a slot. The 0.6 mm chamfers on the tooth tips and the slot entries widen that to about ±7°, and guide the teeth the rest of the way.
+After the key has been used, the thumb-turn can stop at any angle. The teeth only seat fully within ±4° of a slot, and the 0.6 mm chamfers catch them up to about ±7° off.
 
-1. The SG90 pushes the slider down. If the teeth sit on the flange between the slots, it just keeps pressing.
-2. The main servo starts turning, and the teeth slide over the flange until they reach the next slots. That is at most ~51° of servo rotation. Then they snap in.
-3. The servo drives the thumb-turn. It stops when the magnet has come round the learned number of times, not after a fixed time, so the angle spent finding the slots doesn't shorten the turn.
+1. The SG90 pushes the slider down. If the teeth land on the flat between the slots, the SG90 just keeps pressing.
+2. The servo starts turning, and the teeth slide over the flat to the next slots. That takes at most ~51°. Then they drop in.
+3. The servo turns the lock until the magnet has come round the learned number of times. Because it doesn't run for a fixed time, finding the slots doesn't shorten the turn.
 
-`code/tests/motion/run.sh` simulates this for every offset from 0° to 59°. Every case locks fully and ends within ~6° of the home position.
+`code/tests/motion/run.sh` simulates this for every offset from 0° to 59°. Each case locks fully and stops within ~6° of the home position.
 
-## Changing the design
+![clutch open and closed, cut through the middle](../../images/clutch_section.png)
 
-Everything is generated by [`clutch.py`](clutch.py) (`pip install manifold3d trimesh`, then `python clutch.py`). It also runs a collision check over the full fork, slider and thumb-turn range. The main parameters are the servo body size (`SERVO_BODY`, `SERVO_SHAFT_FROM_END`), the clutch travel and teeth, and the fork pivot distance.
+## Verified in CAD
 
-The fit against the existing `bottom` / `middle` parts was checked against their 80 mm bore. The exact height of the extension ring depends on how deep your servo originally sat (`ORIGINAL_FACE_GAP`), so check it on your build before printing it.
+`python lock.py` (needs `pip install manifold3d trimesh`) regenerates every STL from the parameters and then runs `checks.py`:
+
+* **Fit:** no two parts overlap with the clutch open, half closed or closed. The models include the servo, SG90, horns and PCB with its parts.
+* **Motion:**
+  - With the clutch open, the thumb-turn turns a full circle without touching anything.
+  - The hub, horn and open slider turn a full circle on the servo.
+  - With the clutch closed, the slider and adapter turn together.
+  - The teeth seat only when they line up with a slot (±4°).
+* **Assembly:** the adapter, the chassis module (chassis, clip, servo, hub, slider, fork and SG90), the PCB and the cap each go straight down the bore without hitting anything.
+* **Clearances:**
+
+  | Gap | mm |
+  | :-- | --: |
+  | Reed sensor to magnet | 1.25 |
+  | SG90 to the turning adapter | 0.5 |
+  | Fork to SG90 | 0.9 |
+  | Fork to slider | 0.8 |
+  | Teeth to adapter when open | 1.0 |
+  | Tooth engagement when closed | 2.5 |
+  | Servo to PCB | 2.0 |
+
+* **Printability:** every part is checked for overhangs steeper than 45° in its print orientation. What's left is small: the bridge over the slider groove and the round fork bosses.
+
+![exploded view](../../images/lock_exploded.png)
+
+## Not verified
+
+* **Door fit:** this uses the original floor and door tab, so it mounts the same way. The thumb-turn height is your measurement.
+* **Bought-part dimensions:** the servo, SG90 and PCB parts are modelled from datasheet dimensions and the EasyEDA file. Check the servo's tab height (`SERVO_TAB_FROM_FACE`) and the side switch position (`BUTTON_NUB`) on your parts.
+* **Strength:** loads and tolerances on a real printer still need a test print, especially the 0.3 mm sliding fits (`FIT`).

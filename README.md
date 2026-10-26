@@ -40,7 +40,7 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 git clone https://github.com/peterrakolcza/SmartLock.git
 ```
 
-2. 3D print the selected models (optionally the [clutch](3D%20printed%20case/clutch/README.md))
+2. 3D print the [compact clutch lock](3D%20printed%20case/clutch/README.md), or the original case without the clutch
 3. Order the custom PCB and the components from JLCPCB for example
 4. Wait :(
 5. Configure the parameters in [`code/smart_lock/smart_lock.ino`](code/smart_lock/smart_lock.ino)
@@ -112,15 +112,17 @@ The lock now detects this: if the thumb-turn stops before the learned number of 
 
 <br>
 
-## 🔓 Clutch: use the key normally
+## 🔓 Compact clutch lock: use the key normally
 
-Without the clutch, turning the key or the thumb-turn by hand means back-driving the servo gearbox. The optional clutch adds a small SG90 servo that connects the main servo to the thumb-turn only while the lock is moving. The rest of the time the key turns as if the smart lock wasn't there. It uses 3D printed parts and one extra servo, and the V3 PCB needs no changes.
+Without the clutch, turning the key or the thumb-turn by hand means back-driving the servo gearbox. The compact clutch lock adds a small SG90 servo that connects the main servo to the thumb-turn only while the lock is moving. The rest of the time the key turns as if the smart lock wasn't there.
+
+It is a complete new case (82 × 90 mm) around the **unchanged V3 PCB**. All of it is generated and checked in CAD: fit, motion, assembly order and printability.
 
 <img src="images/clutch_operation.gif" width="640" />
 
-<img src="images/clutch_render.png" width="640" />
+<img src="images/lock_cutaway.png" width="640" />
 
-See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly and setup.
+See [the compact clutch lock guide](3D%20printed%20case/clutch/README.md) for parts, assembly and setup. The original case (`bottom`, `middle`, `cover_led`) is still in `3D printed case` if you don't want the clutch.
 
 <br>
 
