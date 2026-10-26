@@ -12,7 +12,7 @@ def client():
     for t in ["set_state","set_current_state","set_target_state","set_battery_lvl"]: c.subscribe(P+"/homekit/"+t,0)
     time.sleep(0.5); return c
 c=client()
-assert (P+"/homekit/set_state","1",True) in got and (P+"/homekit/set_battery_lvl","87",True) in got, got
+assert (P+"/homekit/set_state","1",True) in got, got
 got.clear()
 c.publish(P+"/homekit/state","4",qos=1,retain=True); time.sleep(0.5)   # HomeKey tap -> unlocking
 assert (P+"/homekit/set_state","0",False) in got, got
@@ -26,5 +26,5 @@ time.sleep(6)                                                          # keepali
 assert c.is_connected(), "dropped during keepalive"
 c.disconnect(); c.loop_stop(); got.clear()
 c=client()                                                             # reconnect after reboot
-assert (P+"/homekit/set_state","1",True) in got and (P+"/homekit/set_battery_lvl","87",True) in got, got
+assert (P+"/homekit/set_state","1",True) in got, got
 print("ALL OK")

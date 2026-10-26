@@ -7,4 +7,4 @@
 #include "../../smart_lock/homekey_bridge.h"
 bool locked=true;
 void onCmd(bool l){ printf("[lock] COMMAND %s\n", l?"lock":"unlock"); fflush(stdout); locked=l; homekeyReportState(locked); }
-int main(){ homekeyBegin(onCmd); homekeyReportState(locked); homekeyReportBattery(87); unsigned long t=millis(); while(millis()-t<40000){ homekeyLoop(); delay(2);} }
+int main(){ homekeyBegin(onCmd); homekeyReportState(locked); unsigned long t=millis(); while(millis()-t<40000){ homekeyLoop(); delay(2);} }

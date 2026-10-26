@@ -35,7 +35,6 @@ PETG is recommended for the hub, slider and adapter. Use 4 walls and 40 % infill
 6. Print `extension_ring.stl` and put it between the `bottom` and `middle` parts.
 7. Wiring:
    * **V3 board (USB):** SG90 signal goes to the **RX pin of the programming header** (GPIO3; the firmware switches Serial to TX only). SG90 + and − connect to the main servo's + and − (a Y cable or a soldered splice).
-   * **V4 board (battery):** SG90 goes to the clutch header J2.
 
 ## Setting the clutch angles
 

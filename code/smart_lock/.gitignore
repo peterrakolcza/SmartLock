@@ -1,6 +1,2 @@
-# PlatformIO build output (the battery env generates the IDF files)
+# PlatformIO build output
 .pio/
-.dummy/
-managed_components/
-sdkconfig.*
-CMakeLists.txt

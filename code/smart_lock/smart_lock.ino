@@ -1,9 +1,18 @@
+#include <ESP8266WiFi.h>
+#include <ESP8266WebServer.h>
 #include <ArduinoJson.h>
+#include <Servo.h>
+#include <ESP8266mDNS.h>
 #include <EEPROM.h>
-#include "board.h"
 #include "motion.h"
 
 int baseVersion = 4;
+
+#define SERVOPIN 12
+#define SENSOR 13
+#define BUTTON 4
+#define RINGLED 5
+#define CLUTCHPIN 3 // RX pin of the programming header, Serial runs TX only
 
 Servo servo;
 Servo clutch;
@@ -73,25 +82,17 @@ void setClutch(bool closed) {
 void runServo(int direction) {
   if (direction == 0) {
     servo.detach();
-    boardServoPinIdle(SERVOPIN);
     return;
   }
   if (!servo.attached()) servo.attach(SERVOPIN);
   servo.write(direction > 0 ? 180 : 1);
 }
 
+// The V3 board powers the servos all the time, only the clutch servo's signal is switched off between movements
 void servoPower(bool on) {
-  if (on) {
-    boardKeepAwake(true);
-    boardServoPower(true);
-    return;
-  }
 #if USE_CLUTCH
-  clutch.detach();
-  boardServoPinIdle(CLUTCHPIN);
+  if (!on) clutch.detach();
 #endif
-  boardServoPower(false);
-  boardKeepAwake(false);
 }
 
 bool reedActive() { return digitalRead(SENSOR) == LOW; }
@@ -147,7 +148,7 @@ void handleLockUnlock() {
 const char* ssid = STASSID;
 const char* password = STAPSK;
 
-LockWebServer server(80);
+ESP8266WebServer server(80);
 
 void handleNotFound() {
   String message = "File Not Found\n\n";
@@ -166,7 +167,7 @@ void handleNotFound() {
 
 void handleStatus() {
   char rsp[255];
-  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s,\"battery\":%d}", jammed ? "jammed" : (locked ? "locked" : "unlocked"), homekeyConnected() ? "true" : "false", boardBatteryPercent());
+  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s}", jammed ? "jammed" : (locked ? "locked" : "unlocked"), homekeyConnected() ? "true" : "false");
 
   server.send(200, "application/json", rsp);
 }
@@ -304,40 +305,11 @@ void initWifi() {
 //#############################################################################################################################################
 
 void handleLED() {
-#if LED_ALWAYS_ON_WHEN_UNLOCKED
   if (!locked) {
     digitalWrite(RINGLED, HIGH);
   } else {
     digitalWrite(RINGLED, LOW);
   }
-#else
-  // Battery: light up for a few seconds after every change instead
-  static bool lastLocked = locked;
-  static unsigned long changedAt = 0;
-  if (locked != lastLocked) {
-    lastLocked = locked;
-    changedAt = millis();
-  }
-  digitalWrite(RINGLED, (changedAt != 0 && millis() - changedAt < 3000) ? HIGH : LOW);
-#endif
-}
-
-//#############################################################################################################################################
-//###                                                                   ###
-//###                             BATTERY                               ###
-//###                                                                   ###
-//#############################################################################################################################################
-
-void handleBattery() {
-#if HAS_BATTERY
-  static unsigned long lastReport = 0;
-  if (lastReport == 0 || millis() - lastReport > 30UL * 60 * 1000) {
-    lastReport = millis();
-    int percent = boardBatteryPercent();
-    Serial.println("Battery: " + String(boardBatteryMillivolts()) + " mV, " + String(percent) + " %");
-    homekeyReportBattery(percent);
-  }
-#endif
 }
 
 void flashLED() {
@@ -395,19 +367,16 @@ void onHomeKeyCommand(bool shouldLock) {
 //#############################################################################################################################################
 
 void setup() {
-  boardBegin();
   pinMode(SENSOR, INPUT_PULLUP);
   pinMode(BUTTON, INPUT_PULLUP);
   pinMode(RINGLED, OUTPUT);
-#if USE_CLUTCH && !defined(ESP32)
+#if USE_CLUTCH
   Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY); // RX is the clutch servo signal
 #else
   Serial.begin(9600);
 #endif
-  Serial.println("Smart lock, board " BOARD_NAME);
 
   initWifi();
-  boardLowPower();
 
   server.on("/", HTTP_GET, handleStatus);
   server.on("/", HTTP_POST, handleUpdate);
@@ -447,15 +416,13 @@ void setup() {
 }
 
 void loop() {
-  boardMdnsUpdate();
+  MDNS.update();
   handleLockUnlock();
   if (!motionInProgress()) {
     server.handleClient();
     homekeyLoop();
     handleUpdateLockState();
     handleButton();
-    handleBattery();
   }
   handleLED();
-  if (LOOP_IDLE_DELAY_MS > 0 && !motionInProgress()) delay(LOOP_IDLE_DELAY_MS);
 }

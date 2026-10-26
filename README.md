@@ -12,7 +12,6 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 - 💳 Optional Home Key support with an ESP32 + PN532 reader. You don't need a Raspberry Pi
 - 🔨 Easy installation, compatible with most standard locks
 - 🔓 Optional clutch: the key and thumb-turn turn freely, no fighting against the servo
-- 🔋 Experimental battery powered, self-adhesive version for rentals
 
 <br>
 
@@ -41,7 +40,7 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 git clone https://github.com/peterrakolcza/SmartLock.git
 ```
 
-2. 3D print the selected models (optionally the [clutch](3D%20printed%20case/clutch/README.md) and the [self-adhesive / battery parts](3D%20printed%20case/battery/README.md))
+2. 3D print the selected models (optionally the [clutch](3D%20printed%20case/clutch/README.md))
 3. Order the custom PCB and the components from JLCPCB for example
 4. Wait :(
 5. Configure the parameters in [`code/smart_lock/smart_lock.ino`](code/smart_lock/smart_lock.ino)
@@ -54,12 +53,12 @@ git clone https://github.com/peterrakolcza/SmartLock.git
 #define HOMEKEY_MODE 1 // 0 = standalone, 1 = HomeKey reader connects directly, 2 = external MQTT broker
 #define USE_CLUTCH 1   // 0 = original direct drive, 1 = with the clutch servo
 ```
-6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -e smartlock -t upload`, or `-e smartlock-battery` for the battery board)
+6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -t upload`)
 7. Assemble the whole lock
 8. No calibration needed:
      - Put the magnet in the thumb-turn adapter so it is in front of the reed sensor when the thumb-turn is in its home position (where the key can be inserted and removed).
      - Start with the door unlocked. Then lock it once and unlock it once (button, app or HTTP API). On these first two moves the lock keeps turning until the thumb-turn stops at its end stop, counts the turns with the reed sensor and remembers them.
-     - From then on every move stops when the magnet has come round the learned number of times, so the thumb-turn always ends in the home position. Servo speed, battery level and the clutch finding its slots no longer matter.
+     - From then on every move stops when the magnet has come round the learned number of times, so the thumb-turn always ends in the home position. Servo speed, supply voltage and the clutch finding its slots no longer matter.
      - If the magnet doesn't come round in time (door handle not lifted, bolt blocked), the lock stops, reports **jammed** (Apple Home shows a jam alert, the API returns `"state":"jammed"`) and never claims to be locked.
      - To learn again (another door, moved magnet): hold the side button while powering on. The LED flashes 3 times.
 9. Use it standalone (button + HTTP API), add it to Apple Home with Home Key using the [HomeKey-ESP32 reader](homekey/README.md), or integrate it with Homebridge
@@ -91,8 +90,6 @@ You can just order my custom PCB assembled and flash the firmware. After that, c
 |     D2     |      4      |     Button     |
 |     D1     |      5      |      LED       |
 |     RX     |      3      | Clutch servo signal (optional) |
-
-The battery powered V4 board (ESP32-C3) has its own pin map, see [`PCB/V4-low-power`](PCB/V4-low-power/README.md).
 
 <br>
 <br>
@@ -127,14 +124,6 @@ See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly
 
 <br>
 
-## 🔋 Battery powered, self-adhesive (experimental)
-
-For rentals with no power socket at the door: a [self-adhesive mount and battery box](3D%20printed%20case/battery/README.md) and a [low power ESP32-C3 board](PCB/V4-low-power/README.md). The board switches the servos off between movements and lets the ESP32-C3 light-sleep while it stays connected to Wi-Fi. The estimate is ~5-7 weeks on 4 × AA NiMH, not measured yet. The battery level shows up in Apple Home through the HomeKey reader.
-
-<img src="images/battery_mount_render.png" />
-
-<br>
-
 ## 📙 API
 
 Example request to lock the door:
@@ -154,12 +143,11 @@ Example response:
 ```json
 {
   "state": "locked",
-  "homekey": true,
-  "battery": 100
+  "homekey": true
 }
 ```
 
-`homekey` is `true` while the HomeKey reader (or the external MQTT broker) is connected. `battery` is the battery level in % on the battery board (always 100 on USB power).
+`homekey` is `true` while the HomeKey reader (or the external MQTT broker) is connected.
 
 <br>
 

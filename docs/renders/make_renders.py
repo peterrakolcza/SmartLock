@@ -16,10 +16,8 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "3D printed case" / "clutch"))
-sys.path.insert(0, str(ROOT / "3D printed case" / "battery"))
 sys.path.insert(0, str(Path(__file__).parent))
 
-import adhesive_mount as am  # noqa: E402
 import clutch as c  # noqa: E402
 from render_lib import Scene, callouts, caption, chips  # noqa: E402
 
@@ -198,76 +196,11 @@ def save_gif(frames, path, fps):
     print(f"  {path.name}: {len(frames)} frames, {path.stat().st_size / 1e6:.1f} MB")
 
 
-# ------------------------------------------------------------------------------------------------- battery scene
-
-def battery_scene():
-    """Self-adhesive mount on a door with a long escutcheon, the lock body and the battery box."""
-    scene = Scene(1100, 900)
-    door_part = Manifold.cube((260, 360, 4)).translate((-130, -230, -4))
-    escutcheon = CrossSection.square((am.ESCUTCHEON_WIDTH - 2, 230), center=True).offset(1, JoinType.Round).extrude(am.ESCUTCHEON_DEPTH - 1).translate((0, 45, 0))
-    handle = (Manifold.cylinder(18, 9, circular_segments=48).translate((0, 72, am.ESCUTCHEON_DEPTH - 1))
-              + Manifold.cube((110, 18, 14), center=True).translate((-50, 72, am.ESCUTCHEON_DEPTH + 22)))
-    mount = am.adhesive_mount()
-    lock_body = (Manifold.cylinder(70, am.LOCK_DIAMETER / 2, circular_segments=128)
-                 - Manifold.cylinder(80, am.LOCK_DIAMETER / 2 - 3.5, circular_segments=128).translate((0, 0, 3))).translate((0, 0, am.ESCUTCHEON_DEPTH))
-    cap = Manifold.cylinder(3, am.LOCK_DIAMETER / 2 - 0.5, circular_segments=128).translate((0, 0, am.ESCUTCHEON_DEPTH + 70))
-    led = (Manifold.cylinder(1.2, am.LOCK_DIAMETER / 2 - 5, circular_segments=128) - Manifold.cylinder(2, am.LOCK_DIAMETER / 2 - 9, circular_segments=128).translate((0, 0, -0.5))).translate((0, 0, am.ESCUTCHEON_DEPTH + 73))
-    box = am.battery_box().translate((0, -115, 0))
-    lid = am.battery_lid().rotate((180, 0, 0)).translate((0, -115, am.HOLDER[2] + am.BOX_WALL + 0.5 + 1.6))
-
-    scene.add(door_part, "door", specular=0.05)
-    scene.add(escutcheon, "metal", specular=0.6)
-    scene.add(handle, "metal", specular=0.6)
-    scene.add(mount, "plate")
-    scene.add(lock_body, "case")
-    scene.add(cap, "case")
-    scene.add(led, (1.0, 0.98, 0.9), specular=0.0)
-    scene.add(box, "plate")
-    scene.add(lid, "plate")
-    # Door upright: +y (handle) is up, the camera stands in front of the door, a bit to the right and below
-    scene.camera(position=(260, -120, 360), focal=(-10, -25, 20), up=(0, 1, 0), angle=40)
-    img = scene.image()
-    r_plate = am.PLATE_DIAMETER / 2 - 4
-    callouts(img, scene, [
-        ("adhesive plate", (-r_plate * 0.75, -r_plate * 0.6, am.PLATE_THICKNESS)),
-        ("collar, 3 screws into the lock body", (am.LOCK_DIAMETER / 2 + 3, 0, am.PLATE_THICKNESS + 8)),
-        ("lock body", (am.LOCK_DIAMETER / 2 * 0.9, -am.LOCK_DIAMETER / 2 * 0.3, 50)),
-        ("handle escutcheon", (am.ESCUTCHEON_WIDTH / 2 - 2, 120, am.ESCUTCHEON_DEPTH - 1)),
-        ("4 x AA NiMH battery box", (am.HOLDER[0] / 2 + 3, -115, 10)),
-    ], margin=230)
-    front = caption(img, "On the door", "No screws in the door, the plate is stuck on around the cylinder")
-
-    # Back of the plate: VHB tape and the escutcheon channel
-    scene.clear()
-    tape = (Manifold.cylinder(1.0, am.PLATE_DIAMETER / 2 - 2.5, circular_segments=128)
-            - Manifold.cylinder(3, am.LOCK_DIAMETER / 2 + 2.5, circular_segments=128).translate((0, 0, -1)))
-    tape -= Manifold.cube((am.ESCUTCHEON_WIDTH + 4, 300, 4), center=True)
-    tape -= Manifold.cube((am.TAB_WIDTH + 4, 150, 4)).translate((-(am.TAB_WIDTH + 4) / 2, 0, -2))
-    scene.add(mount, "plate")
-    scene.add(tape.translate((0, 0, -0.6)), (0.35, 0.62, 0.95), specular=0.05)
-    scene.camera(position=(-90, -150, -230), focal=(0, 0, 8), up=(0, 1, 0), angle=36)
-    img = scene.image()
-    callouts(img, scene, [
-        ("VHB tape (~40 cm2)", (-r_plate * 0.7, -r_plate * 0.55, -1)),
-        ("channel for the escutcheon", (0, -am.PLATE_DIAMETER / 2 + 6, am.ESCUTCHEON_DEPTH)),
-        ("notch for the original tab", (0, am.PLATE_DIAMETER / 2 - 6, 4)),
-    ], margin=230)
-    back = caption(img, "Back of the plate", "Tape ring on both sides of the escutcheon channel")
-
-    sheet = Image.new("RGB", (2 * front.width, front.height), "white")
-    sheet.paste(front, (0, 0))
-    sheet.paste(back, (front.width, 0))
-    sheet.save(IMAGES / "battery_mount_render.png")
-    print("battery render done")
-
-
 if __name__ == "__main__":
-    which = set(sys.argv[1:]) or {"clutch", "battery", "homekey"}
+    which = set(sys.argv[1:]) or {"clutch", "homekey"}
     if "clutch" in which:
         clutch_stills()
         clutch_animation()
-    if "battery" in which:
-        battery_scene()
     if "homekey" in which:
         import homekey_flow
         homekey_flow.main(IMAGES)

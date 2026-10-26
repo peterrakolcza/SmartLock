@@ -77,7 +77,7 @@ def lock(draw, angle, led, label_state):
     dx, dy = math.cos(a) * 42, math.sin(a) * 42
     nx, ny = -math.sin(a) * 11, math.cos(a) * 11
     draw.polygon([(x - dx - nx, y - dy - ny), (x + dx - nx, y + dy - ny), (x + dx + nx, y + dy + ny), (x - dx + nx, y - dy + ny)], fill=(220, 222, 226), outline=INK)
-    text(draw, (x, y + r + 34), "Smart lock (ESP8266 / ESP32-C3)", 18, INK)
+    text(draw, (x, y + r + 34), "Smart lock (ESP8266)", 18, INK)
     text(draw, (x, y + r + 58), label_state, 18, MUTED)
 
 
