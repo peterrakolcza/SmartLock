@@ -1,18 +1,11 @@
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
 #include <ArduinoJson.h>
-#include <Servo.h>
-#include <ESP8266mDNS.h>
 #include <EEPROM.h>
+#include "board.h"
 
-int baseVersion = 3;
-
-#define SERVOPIN 12
-#define SENSOR 13
-#define BUTTON 4
-#define RINGLED 5
+int baseVersion = 4;
 
 Servo servo;
+Servo clutch;
 
 int counter = 0;
 
@@ -41,6 +34,14 @@ bool previousStateWasHigh = true;
 #define MQTT_USER "" // optional, must match the reader's MQTT settings
 #define MQTT_PASS ""
 
+// Clutch servo (3D printed case/clutch): the key / thumb-turn turns freely while the lock is idle
+// Set to 0 for the original direct drive build without the clutch
+#define USE_CLUTCH 1 // CHANGE THIS
+#define CLUTCH_OPEN_ANGLE 75     // CALIBRATE: fork lifted, dogs apart
+#define CLUTCH_CLOSED_ANGLE 105  // CALIBRATE: fork pressed down, a few degrees past contact so it keeps pushing
+#define CLUTCH_SETTLE_MS 350     // time for the SG90 to move
+#define CLUTCH_RELIEF_MS 40      // short reverse of the main servo so the dogs are not loaded when releasing
+
 #define SETTINGS_MAGIC 0x5D10C3
 
 struct { 
@@ -58,55 +59,97 @@ struct {
 //###                                                                   ###
 //#############################################################################################################################################
 bool locked = true;
-bool lockingInProgress = false;
-bool unlockingInProgress = false;
-unsigned long lockUnlockStartTime = 0;
 
-void lock() {
-  if (!locked && !lockingInProgress) {
-    servo.attach(SERVOPIN);
-    servo.write(180);
-    lockUnlockStartTime = millis();
-    lockingInProgress = true;
-  }
+// A movement is a small state machine so the loop never blocks:
+// engage the clutch -> run the servo -> back off a little -> release the clutch -> settle
+enum Motion { IDLE, ENGAGING, MOVING, RELIEVING, RELEASING };
+Motion motion = IDLE;
+bool motionToLocked = true;
+unsigned long motionStartTime = 0;
+
+void setClutch(bool closed) {
+#if USE_CLUTCH
+  if (!clutch.attached()) clutch.attach(CLUTCHPIN);
+  clutch.write(closed ? CLUTCH_CLOSED_ANGLE : CLUTCH_OPEN_ANGLE);
+#endif
 }
 
-void unlock() {
-  if (locked && !unlockingInProgress) {
-    servo.attach(SERVOPIN);
-    servo.write(1);
-    lockUnlockStartTime = millis();
-    unlockingInProgress = true;
-  }
+void servosOff() {
+  servo.detach();
+  boardServoPinIdle(SERVOPIN);
+#if USE_CLUTCH
+  clutch.detach();
+  boardServoPinIdle(CLUTCHPIN);
+#endif
+  boardServoPower(false);
 }
+
+void startMotion(bool toLocked) {
+  if (motion != IDLE || locked == toLocked) return;
+  boardKeepAwake(true);
+  boardServoPower(true);
+  setClutch(true);
+  motionToLocked = toLocked;
+  motionStartTime = millis();
+  motion = ENGAGING;
+}
+
+void lock() { startMotion(true); }
+
+void unlock() { startMotion(false); }
+
+bool motionInProgress() { return motion != IDLE; }
 
 void handleLockUnlock() {
-  if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock) {
-    if (servo.attached()) {
-      servo.detach();
-      locked = true;
+  unsigned long elapsed = millis() - motionStartTime;
+  unsigned long runTime = motionToLocked ? settings.TimeToLock : settings.TimeToUnlock;
 
-      // Completed the lock, reset every state related variable
-      counter = 0;
-      previousStateWasHigh = false;
-      homekeyReportState(locked);
-    }
-    
-    if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock + 1000) lockingInProgress = false;
-  }
-  
-  if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock) {
-    if (servo.attached()) {
-      servo.detach();
-      locked = false;
+  switch (motion) {
+    case IDLE:
+      break;
 
-      // Completed the unlock, reset every state related variable
-      counter = 0;
-      previousStateWasHigh = false;
-      homekeyReportState(locked);
-    }
-    
-    if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock + 1000) unlockingInProgress = false;
+    case ENGAGING:
+      if (!USE_CLUTCH || elapsed >= CLUTCH_SETTLE_MS) {
+        servo.attach(SERVOPIN);
+        servo.write(motionToLocked ? 180 : 1);
+        motionStartTime = millis();
+        motion = MOVING;
+      }
+      break;
+
+    case MOVING:
+      if (elapsed >= runTime) {
+        servo.write(motionToLocked ? 1 : 180);
+        motionStartTime = millis();
+        motion = RELIEVING;
+      }
+      break;
+
+    case RELIEVING:
+      if (!USE_CLUTCH || elapsed >= CLUTCH_RELIEF_MS) {
+        servo.detach();
+        boardServoPinIdle(SERVOPIN);
+        setClutch(false);
+        locked = motionToLocked;
+
+        // Completed the movement, reset every state related variable
+        counter = 0;
+        previousStateWasHigh = false;
+        homekeyReportState(locked);
+
+        motionStartTime = millis();
+        motion = RELEASING;
+      }
+      break;
+
+    case RELEASING:
+      // The thumb-turn may still swing back a little, the sensor is ignored for another second
+      if (elapsed >= CLUTCH_SETTLE_MS + 1000) {
+        servosOff();
+        boardKeepAwake(false);
+        motion = IDLE;
+      }
+      break;
   }
 }
 
@@ -119,7 +162,7 @@ void handleLockUnlock() {
 const char* ssid = STASSID;
 const char* password = STAPSK;
 
-ESP8266WebServer server(80);
+LockWebServer server(80);
 
 void handleNotFound() {
   String message = "File Not Found\n\n";
@@ -138,7 +181,7 @@ void handleNotFound() {
 
 void handleStatus() {
   char rsp[255];
-  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s}", locked ? "locked" : "unlocked", homekeyConnected() ? "true" : "false");
+  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s,\"battery\":%d}", locked ? "locked" : "unlocked", homekeyConnected() ? "true" : "false", boardBatteryPercent());
 
   server.send(200, "application/json", rsp);
 }
@@ -275,11 +318,40 @@ void initWifi() {
 //#############################################################################################################################################
 
 void handleLED() {
+#if LED_ALWAYS_ON_WHEN_UNLOCKED
   if (!locked) {
     digitalWrite(RINGLED, HIGH);
   } else {
     digitalWrite(RINGLED, LOW);
   }
+#else
+  // Battery: light up for a few seconds after every change instead
+  static bool lastLocked = locked;
+  static unsigned long changedAt = 0;
+  if (locked != lastLocked) {
+    lastLocked = locked;
+    changedAt = millis();
+  }
+  digitalWrite(RINGLED, (changedAt != 0 && millis() - changedAt < 3000) ? HIGH : LOW);
+#endif
+}
+
+//#############################################################################################################################################
+//###                                                                   ###
+//###                             BATTERY                               ###
+//###                                                                   ###
+//#############################################################################################################################################
+
+void handleBattery() {
+#if HAS_BATTERY
+  static unsigned long lastReport = 0;
+  if (lastReport == 0 || millis() - lastReport > 30UL * 60 * 1000) {
+    lastReport = millis();
+    int percent = boardBatteryPercent();
+    Serial.println("Battery: " + String(boardBatteryMillivolts()) + " mV, " + String(percent) + " %");
+    homekeyReportBattery(percent);
+  }
+#endif
 }
 
 void flashLED() {
@@ -309,6 +381,11 @@ void calibrate() {
   while (digitalRead(BUTTON) == LOW) {
     delay(50);
   }
+
+  boardKeepAwake(true);
+  boardServoPower(true);
+  setClutch(true);
+  delay(CLUTCH_SETTLE_MS);
 
   unsigned long startTime = millis();
   servo.attach(SERVOPIN);
@@ -340,6 +417,9 @@ void calibrate() {
     Serial.println("Invalid unlock time, resetting back to default: 5000 ms");
   }
 
+  servosOff();
+  boardKeepAwake(false);
+
   EEPROM.put(0, settings); //write data to array in ram 
   EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
   
@@ -365,12 +445,19 @@ void onHomeKeyCommand(bool shouldLock) {
 //#############################################################################################################################################
 
 void setup() {
+  boardBegin();
   pinMode(SENSOR, INPUT_PULLUP);
   pinMode(BUTTON, INPUT_PULLUP);
   pinMode(RINGLED, OUTPUT);
+#if USE_CLUTCH && !defined(ESP32)
+  Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY); // RX is the clutch servo signal
+#else
   Serial.begin(9600);
+#endif
+  Serial.println("Smart lock, board " BOARD_NAME);
 
   initWifi();
+  boardLowPower();
 
   server.on("/", HTTP_GET, handleStatus);
   server.on("/", HTTP_POST, handleUpdate);
@@ -404,13 +491,15 @@ void setup() {
 }
 
 void loop() {
-  MDNS.update();
+  boardMdnsUpdate();
   handleLockUnlock();
-  if (!lockingInProgress && !unlockingInProgress) {
+  if (!motionInProgress()) {
     server.handleClient();
     homekeyLoop();
     handleUpdateLockState();
     handleButton();
+    handleBattery();
   }
   handleLED();
+  if (LOOP_IDLE_DELAY_MS > 0 && !motionInProgress()) delay(LOOP_IDLE_DELAY_MS);
 }

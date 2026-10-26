@@ -6,6 +6,7 @@
 //
 //   <prefix>/homekit/state              reader -> lock   0 unlocked, 1 locked, 4 unlocking, 5 locking
 //   <prefix>/homekit/set_state          lock -> reader   0 / 1, real state of the lock (sets current + target)
+//   <prefix>/homekit/set_battery_lvl    lock -> reader   battery %, battery powered board only
 //
 // HOMEKEY_MODE (set in smart_lock.ino):
 //   0  disabled, the lock works standalone (HTTP API + button)
@@ -14,7 +15,11 @@
 
 #pragma once
 
+#if defined(ESP32)
+#include <WiFi.h>
+#else
 #include <ESP8266WiFi.h>
+#endif
 
 #ifndef HOMEKEY_MODE
 #define HOMEKEY_MODE 0
@@ -25,6 +30,7 @@ typedef void (*HomeKeyCommandHandler)(bool lock);
 static HomeKeyCommandHandler homekeyOnCommand = nullptr;
 static const String homekeyStateTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/state";
 static const String homekeySetStateTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/set_state";
+static const String homekeyBatteryTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/set_battery_lvl";
 
 // HomeKey-ESP32 lock states
 #define HK_UNLOCKED 0
@@ -57,6 +63,7 @@ __attribute__((unused)) static void homekeyHandleMessage(const String& topic, co
 
 #define MQTT_BUFFER_SIZE 1024
 #define MQTT_MAX_SUBSCRIPTIONS 8
+#define MQTT_MAX_RETAINED 4
 
 class MiniMqttBroker {
 public:
@@ -96,11 +103,13 @@ public:
     }
   }
 
-  // The last retained message is replayed whenever the reader (re)subscribes
+  // The last retained message per topic is replayed whenever the reader (re)subscribes
   void publish(const String& topic, const String& payload, bool retain) {
     if (retain) {
-      retainedTopic = topic;
-      retainedPayload = payload;
+      uint8_t slot = 0;
+      while (slot < MQTT_MAX_RETAINED - 1 && retainedTopic[slot].length() > 0 && retainedTopic[slot] != topic) slot++;
+      retainedTopic[slot] = topic;
+      retainedPayload[slot] = payload;
     }
     if (connected && isSubscribed(topic)) sendPublish(topic, payload, false);
   }
@@ -116,8 +125,8 @@ private:
   uint8_t buffer[MQTT_BUFFER_SIZE];
   String subscriptions[MQTT_MAX_SUBSCRIPTIONS];
   uint8_t subscriptionCount = 0;
-  String retainedTopic;
-  String retainedPayload;
+  String retainedTopic[MQTT_MAX_RETAINED];
+  String retainedPayload[MQTT_MAX_RETAINED];
 
   int readByte() {
     unsigned long start = millis();
@@ -253,13 +262,15 @@ private:
     uint32_t pos = 2;
     uint8_t granted[MQTT_MAX_SUBSCRIPTIONS];
     uint8_t count = 0;
-    bool wantsRetained = false;
+    bool wantsRetained[MQTT_MAX_RETAINED] = {};
     while (pos < stored && count < MQTT_MAX_SUBSCRIPTIONS) {
       String filter;
       if (!readString(pos, stored, filter) || pos >= stored) return false;
       pos++; // requested QoS, everything is delivered with QoS 0
       if (subscriptionCount < MQTT_MAX_SUBSCRIPTIONS) subscriptions[subscriptionCount++] = filter;
-      if (retainedTopic.length() > 0 && topicMatches(filter, retainedTopic)) wantsRetained = true;
+      for (uint8_t i = 0; i < MQTT_MAX_RETAINED; i++) {
+        if (retainedTopic[i].length() > 0 && topicMatches(filter, retainedTopic[i])) wantsRetained[i] = true;
+      }
       granted[count++] = 0x00;
     }
 
@@ -267,7 +278,9 @@ private:
     memcpy(suback + 4, granted, count);
     peer.write(suback, 4 + count);
 
-    if (wantsRetained) sendPublish(retainedTopic, retainedPayload, true);
+    for (uint8_t i = 0; i < MQTT_MAX_RETAINED; i++) {
+      if (wantsRetained[i]) sendPublish(retainedTopic[i], retainedPayload[i], true);
+    }
     return true;
   }
 
@@ -336,6 +349,10 @@ void homekeyReportState(bool isLocked) {
   homekeyBroker.publish(homekeySetStateTopic, isLocked ? "1" : "0", true);
 }
 
+void homekeyReportBattery(int percent) {
+  homekeyBroker.publish(homekeyBatteryTopic, String(percent), true);
+}
+
 bool homekeyConnected() { return homekeyBroker.isConnected(); }
 
 #elif HOMEKEY_MODE == 2
@@ -382,6 +399,10 @@ void homekeyLoop() {
   homekeyMqtt.loop();
 }
 
+void homekeyReportBattery(int percent) {
+  if (homekeyMqtt.connected()) homekeyMqtt.publish(homekeyBatteryTopic.c_str(), String(percent).c_str(), true);
+}
+
 bool homekeyConnected() { return homekeyMqtt.connected(); }
 
 #else
@@ -389,6 +410,7 @@ bool homekeyConnected() { return homekeyMqtt.connected(); }
 void homekeyBegin(HomeKeyCommandHandler) {}
 void homekeyLoop() {}
 void homekeyReportState(bool) {}
+void homekeyReportBattery(int) {}
 bool homekeyConnected() { return false; }
 
 #endif

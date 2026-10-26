@@ -11,6 +11,8 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 - 🕰️ Real-time status updates
 - 💳 Optional Home Key support with an ESP32 + PN532 reader. You don't need a Raspberry Pi
 - 🔨 Easy installation, compatible with most standard locks
+- 🔓 Optional clutch: the key and thumb-turn turn freely, no fighting against the servo
+- 🔋 Experimental battery powered, self-adhesive version for rentals
 
 <br>
 
@@ -39,7 +41,7 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 git clone https://github.com/peterrakolcza/SmartLock.git
 ```
 
-2. 3D print the selected models
+2. 3D print the selected models (optionally the [clutch](3D%20printed%20case/clutch/README.md) and the [self-adhesive / battery parts](3D%20printed%20case/battery/README.md))
 3. Order the custom PCB and the components from JLCPCB for example
 4. Wait :(
 5. Configure the parameters in [`code/smart_lock/smart_lock.ino`](code/smart_lock/smart_lock.ino)
@@ -52,8 +54,9 @@ git clone https://github.com/peterrakolcza/SmartLock.git
 const int numberOfTurnsRequired = 1; // CHANGE THIS
 
 #define HOMEKEY_MODE 1 // 0 = standalone, 1 = HomeKey reader connects directly, 2 = external MQTT broker
+#define USE_CLUTCH 1   // 0 = original direct drive, 1 = with the clutch servo
 ```
-6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -t upload`)
+6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -e smartlock -t upload`, or `-e smartlock-battery` for the battery board)
 7. Assemble the whole lock
 8. Calibration: 
      -  it is highly recommended to calibrate the smart lock at first boot by holding down side-button while powering it on. 
@@ -91,6 +94,9 @@ You can just order my custom PCB assembled and flash the firmware. After that, c
 |     D7     |      13     |  Reed sensor   |
 |     D2     |      4      |     Button     |
 |     D1     |      5      |      LED       |
+|     RX     |      3      | Clutch servo signal (optional) |
+
+The battery powered V4 board (ESP32-C3) has its own pin map, see [`PCB/V4-low-power`](PCB/V4-low-power/README.md).
 
 <br>
 <br>
@@ -113,6 +119,22 @@ _A future feature is planned to solve this issue, by automatically falling back 
 
 <br>
 
+## 🔓 Clutch: use the key normally
+
+Without the clutch, turning the key or the thumb-turn by hand means back-driving the servo gearbox. The optional clutch adds a small SG90 servo that connects the main servo to the thumb-turn only while the lock is moving. The rest of the time the key turns as if the smart lock wasn't there. It uses 3D printed parts and one extra servo, and the V3 PCB needs no changes.
+
+<img src="images/clutch_assembly.png" />
+
+See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly and calibration.
+
+<br>
+
+## 🔋 Battery powered, self-adhesive (experimental)
+
+For rentals with no power socket at the door: a [self-adhesive mount and battery box](3D%20printed%20case/battery/README.md) and a [low power ESP32-C3 board](PCB/V4-low-power/README.md). The board switches the servos off between movements and lets the ESP32-C3 light-sleep while it stays connected to Wi-Fi. The estimate is ~5-7 weeks on 4 × AA NiMH, not measured yet. The battery level shows up in Apple Home through the HomeKey reader.
+
+<br>
+
 ## 📙 API
 
 Example request to lock the door:
@@ -132,11 +154,12 @@ Example response:
 ```json
 {
   "state": "locked",
-  "homekey": true
+  "homekey": true,
+  "battery": 100
 }
 ```
 
-`homekey` is `true` while the HomeKey reader (or the external MQTT broker) is connected.
+`homekey` is `true` while the HomeKey reader (or the external MQTT broker) is connected. `battery` is the battery level in % on the battery board (always 100 on USB power).
 
 <br>
 
