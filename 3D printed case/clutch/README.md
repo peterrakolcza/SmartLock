@@ -4,7 +4,13 @@ In the original design the servo horn is screwed straight to the thumb-turn adap
 
 The clutch decouples them. A small dog clutch sits between the servo and the thumb-turn, and a second micro servo (SG90, ~1.5 €) closes it **only while the lock is moving**. The rest of the time the thumb-turn spins freely, any number of turns in either direction, so it works with euro cylinders that need full 360° key turns.
 
-![clutch assembly](../../images/clutch_assembly.png)
+![how the clutch works](../../images/clutch_operation.gif)
+
+![clutch assembly](../../images/clutch_render.png)
+
+![clutch open and closed, cut through the middle](../../images/clutch_section.png)
+
+![exploded view](../../images/clutch_exploded.png)
 
 | Part | Print | Notes |
 | :-- | :-- | :-- |

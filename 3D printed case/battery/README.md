@@ -2,6 +2,8 @@
 
 For rentals where you can't screw anything to the door, and with no power socket nearby.
 
+![self-adhesive mount and battery box](../../images/battery_mount_render.png)
+
 | Part | Notes |
 | :-- | :-- |
 | `adhesive_mount.stl` | Ring plate stuck to the door around the lock cylinder with **3M VHB** tape (e.g. 4910 / 5952, 1 mm). A collar holds the lock's `bottom` part with 3 × M3 self-tapping screws. A channel on the back straddles a long handle escutcheon: set `ESCUTCHEON_WIDTH` / `ESCUTCHEON_DEPTH` to your door, or `0` for a round rosette. Cut off the original mounting tab, or use the notch. |

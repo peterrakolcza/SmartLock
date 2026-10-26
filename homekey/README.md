@@ -10,6 +10,8 @@ The smart lock stays the mechanism. The reader is the Apple Home accessory and t
                                  └──────── real lock state ◀─────────┘  (button, key, HTTP API)
 ```
 
+![Home Key flow](../images/homekey_flow.gif)
+
 ## Three ways to use the lock
 
 | Setup | What you need | `HOMEKEY_MODE` |

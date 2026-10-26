@@ -123,7 +123,9 @@ _A future feature is planned to solve this issue, by automatically falling back 
 
 Without the clutch, turning the key or the thumb-turn by hand means back-driving the servo gearbox. The optional clutch adds a small SG90 servo that connects the main servo to the thumb-turn only while the lock is moving. The rest of the time the key turns as if the smart lock wasn't there. It uses 3D printed parts and one extra servo, and the V3 PCB needs no changes.
 
-<img src="images/clutch_assembly.png" />
+<img src="images/clutch_operation.gif" width="640" />
+
+<img src="images/clutch_render.png" width="640" />
 
 See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly and calibration.
 
@@ -132,6 +134,8 @@ See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly
 ## 🔋 Battery powered, self-adhesive (experimental)
 
 For rentals with no power socket at the door: a [self-adhesive mount and battery box](3D%20printed%20case/battery/README.md) and a [low power ESP32-C3 board](PCB/V4-low-power/README.md). The board switches the servos off between movements and lets the ESP32-C3 light-sleep while it stays connected to Wi-Fi. The estimate is ~5-7 weeks on 4 × AA NiMH, not measured yet. The battery level shows up in Apple Home through the HomeKey reader.
+
+<img src="images/battery_mount_render.png" />
 
 <br>
 
@@ -182,6 +186,8 @@ You have 2 options to integrate the smart lock to your existing Apple HomeKit sm
 <img src="images/homekey_card.JPEG" height=350  align="right">
 
 The lock works with [HomeKey-ESP32](https://github.com/rednblkx/HomeKey-ESP32) by [rednblkx](https://github.com/rednblkx). An ESP32 board with a PN532 NFC module shows up in Apple Home as a native lock with Home Key and Express mode, and it drives this lock over Wi-Fi. The lock firmware has a tiny built-in MQTT broker, so the reader connects straight to it and you don't need a Raspberry Pi, Homebridge or any server.
+
+<img src="images/homekey_flow.gif" width="760" />
 
 See the **[Home Key setup guide](homekey/README.md)** for parts, wiring, the 3D printed reader enclosure, and configuration.
 
