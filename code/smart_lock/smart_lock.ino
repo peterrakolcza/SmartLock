@@ -30,11 +30,27 @@ int counter = 0;
 const int numberOfTurnsRequired = 1; // CHANGE THIS
 bool previousStateWasHigh = true;
 
+// HomeKey / native Apple Home support with a HomeKey-ESP32 reader, see homekey/README.md
+// 0 = standalone, HTTP API + button only
+// 1 = built-in broker, the reader connects directly to this lock (no Raspberry Pi or server needed)
+// 2 = external MQTT broker (Mosquitto, Home Assistant, ...)
+#define HOMEKEY_MODE 1 // CHANGE THIS
+#define HOMEKEY_TOPIC_PREFIX "smartlock-reader" // MQTT Client ID configured on the reader
+#define MQTT_HOST "192.168.1.10" // only used in mode 2
+#define MQTT_PORT 1883
+#define MQTT_USER "" // optional, must match the reader's MQTT settings
+#define MQTT_PASS ""
+
+#define SETTINGS_MAGIC 0x5D10C3
+
 struct { 
   // CALIBRATE
   int TimeToLock = 1000;
   int TimeToUnlock = 1000;
+  uint32_t magic = SETTINGS_MAGIC;
 } settings;
+
+#include "homekey_bridge.h"
 
 //#############################################################################################################################################
 //###                                                                   ###
@@ -66,24 +82,29 @@ void unlock() {
 
 void handleLockUnlock() {
   if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock) {
-    servo.detach();
-    locked = true;
+    if (servo.attached()) {
+      servo.detach();
+      locked = true;
 
-    // Completed the unlock, reset every state related variable
-    counter = 0;
-    previousStateWasHigh = false;
-    
+      // Completed the lock, reset every state related variable
+      counter = 0;
+      previousStateWasHigh = false;
+      homekeyReportState(locked);
+    }
     
     if (lockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToLock + 1000) lockingInProgress = false;
   }
   
   if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock) {
-    servo.detach();
-    locked = false;
+    if (servo.attached()) {
+      servo.detach();
+      locked = false;
 
-    // Completed the unlock, reset every state related variable
-    counter = 0;
-    previousStateWasHigh = false;
+      // Completed the unlock, reset every state related variable
+      counter = 0;
+      previousStateWasHigh = false;
+      homekeyReportState(locked);
+    }
     
     if (unlockingInProgress && millis() - lockUnlockStartTime >= settings.TimeToUnlock + 1000) unlockingInProgress = false;
   }
@@ -117,7 +138,7 @@ void handleNotFound() {
 
 void handleStatus() {
   char rsp[255];
-  sprintf(rsp, "{\"state\":\"%s\"}", locked ? "locked" : "unlocked");
+  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s}", locked ? "locked" : "unlocked", homekeyConnected() ? "true" : "false");
 
   server.send(200, "application/json", rsp);
 }
@@ -169,8 +190,9 @@ void handleUpdate() {
       }
       
     }
-
-    server.send(400, "text/plain", "INVALID POST REQUEST");
+    else {
+      server.send(400, "text/plain", "INVALID POST REQUEST");
+    }
   } else {
     server.send(400, "text/plain", "EMPTY POST REQUEST");
   }
@@ -200,6 +222,7 @@ void handleUpdateLockState() {
       locked = true;
       Serial.println("locked manually");
     }
+    homekeyReportState(locked);
   }
 }
 
@@ -287,7 +310,7 @@ void calibrate() {
     delay(50);
   }
 
-  int startTime = millis();
+  unsigned long startTime = millis();
   servo.attach(SERVOPIN);
   servo.write(180);
   while (digitalRead(BUTTON) == HIGH) {
@@ -295,7 +318,7 @@ void calibrate() {
   }
   servo.detach();
   settings.TimeToLock = millis() - startTime - 1000;
-  if (settings.TimeToLock >= 1 && settings.TimeToLock <= 10) Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
+  if (settings.TimeToLock >= 100 && settings.TimeToLock <= 10000) Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
   else {
     settings.TimeToLock = 5000;
     Serial.println("Invalid lock time, resetting back to default: 5000 ms");
@@ -311,7 +334,7 @@ void calibrate() {
   }
   servo.detach();
   settings.TimeToUnlock = millis() - startTime - 1000;
-  if (settings.TimeToUnlock >= 1 && settings.TimeToUnlock <= 10) Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
+  if (settings.TimeToUnlock >= 100 && settings.TimeToUnlock <= 10000) Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
   else {
     settings.TimeToUnlock = 5000;
     Serial.println("Invalid unlock time, resetting back to default: 5000 ms");
@@ -321,6 +344,18 @@ void calibrate() {
   EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
   
   flashLED();
+}
+
+//#############################################################################################################################################
+//###                                                                   ###
+//###                             HOMEKEY                               ###
+//###                                                                   ###
+//#############################################################################################################################################
+
+void onHomeKeyCommand(bool shouldLock) {
+  if (shouldLock && !locked) lock();
+  else if (!shouldLock && locked) unlock();
+  else homekeyReportState(locked); // already there, let the reader settle
 }
 
 //#############################################################################################################################################
@@ -350,6 +385,12 @@ void setup() {
 
   EEPROM.begin(sizeof(settings));
   EEPROM.get(0, settings); //read data from array in ram and cast it into struct called settings
+  if (settings.magic != SETTINGS_MAGIC) {
+    // Never calibrated, the flash holds garbage
+    settings.TimeToLock = 1000;
+    settings.TimeToUnlock = 1000;
+    settings.magic = SETTINGS_MAGIC;
+  }
   Serial.println("Current lock time: " + String(settings.TimeToLock) + " ms");
   Serial.println("Current unlock time: " + String(settings.TimeToUnlock) + " ms");
 
@@ -357,6 +398,9 @@ void setup() {
   if (digitalRead(BUTTON) == LOW) {
     calibrate();
   }
+
+  homekeyBegin(onHomeKeyCommand);
+  homekeyReportState(locked);
 }
 
 void loop() {
@@ -364,6 +408,7 @@ void loop() {
   handleLockUnlock();
   if (!lockingInProgress && !unlockingInProgress) {
     server.handleClient();
+    homekeyLoop();
     handleUpdateLockState();
     handleButton();
   }

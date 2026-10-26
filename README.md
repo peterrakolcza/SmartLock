@@ -7,9 +7,9 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 ### Features
 
 - 📱 Remote control of lock through app or web interface
-- 🔐 Smart home integration like Homebridge.
+- 🔐 Native Apple Home support with the HomeKey-ESP32 reader, or Homebridge
 - 🕰️ Real-time status updates
-- 💳 Optional Home Key support
+- 💳 Optional Home Key support with an ESP32 + PN532 reader. You don't need a Raspberry Pi
 - 🔨 Easy installation, compatible with most standard locks
 
 <br>
@@ -42,21 +42,18 @@ git clone https://github.com/peterrakolcza/SmartLock.git
 2. 3D print the selected models
 3. Order the custom PCB and the components from JLCPCB for example
 4. Wait :(
-5. Configure the parameters in the code
+5. Configure the parameters in [`code/smart_lock/smart_lock.ino`](code/smart_lock/smart_lock.ino)
 ```
 #ifndef STASSID
 #define STASSID "*****" // CHANGE THIS
 #define STAPSK  "*****" // CHANGE THIS
 #endif
 
-struct { 
-  const int numberOfTurnsRequired = 2; // CHANGE THIS
-  // CALIBRATE
-  int TimeToLock = 1000;
-  int TimeToUnlock = 1000;
-} settings;
+const int numberOfTurnsRequired = 1; // CHANGE THIS
+
+#define HOMEKEY_MODE 1 // 0 = standalone, 1 = HomeKey reader connects directly, 2 = external MQTT broker
 ```
-6. Flash the firmware
+6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -t upload`)
 7. Assemble the whole lock
 8. Calibration: 
      -  it is highly recommended to calibrate the smart lock at first boot by holding down side-button while powering it on. 
@@ -66,7 +63,7 @@ struct {
      - Finally, it will try to unlock the door until the button is pressed. 
      - It will flash 3 times to indicate the end of the calibration process.
      - The smart lock now registered and saved the amount of time required to lock / unlock the door.
-9. Integrate it into your existing smart home ecosystem using the API function or Homebrige with / without Home Key support
+9. Use it standalone (button + HTTP API), add it to Apple Home with Home Key using the [HomeKey-ESP32 reader](homekey/README.md), or integrate it with Homebridge
 
 <br>
 
@@ -134,9 +131,12 @@ Example response:
 
 ```json
 {
-  "state": "locked"
+  "state": "locked",
+  "homekey": true
 }
 ```
+
+`homekey` is `true` while the HomeKey reader (or the external MQTT broker) is connected.
 
 <br>
 
@@ -154,25 +154,15 @@ Homebridge is a lightweight Node.js server you can run on your home network that
 
 You have 2 options to integrate the smart lock to your existing Apple HomeKit smart home:
 
-### Home Key
+### Home Key (native Apple Home)
 
 <img src="images/homekey_card.JPEG" height=350  align="right">
 
+The lock works with [HomeKey-ESP32](https://github.com/rednblkx/HomeKey-ESP32) by [rednblkx](https://github.com/rednblkx). An ESP32 board with a PN532 NFC module shows up in Apple Home as a native lock with Home Key and Express mode, and it drives this lock over Wi-Fi. The lock firmware has a tiny built-in MQTT broker, so the reader connects straight to it and you don't need a Raspberry Pi, Homebridge or any server.
 
-This all made possible by this project: [apple-home-key-reader](https://github.com/kormax/apple-home-key-reader) , thanks to [kormax](https://github.com/kormax). Furthermore, thanks for [nagolnad](https://github.com/nagolnad) for a [OrangePi Zero 2W Implementation](https://github.com/kormax/apple-home-key-reader/discussions/14) which was a great starting point!
+See the **[Home Key setup guide](homekey/README.md)** for parts, wiring, the 3D printed reader enclosure, and configuration.
 
-Their project offers a demonstration of an Apple Home Key Reader built in Python. It includes:
-
-- Fully functional Apple Home Key NFC authentication;
-- NFC Express mode support;
-- HAP configuration (as a virtual lock)
-
-It's intended for makers and developers interested in building practical and user-friendly applications using this example.
-
-To add Home Key support to this smart lock:
-1. 3D print the case included in the repository
-2. follow this guide: [OrangePi Zero 2W Implementation](https://github.com/kormax/apple-home-key-reader/discussions/14)
-3. use the modified code included in the repository to make it compatible with this lock 
+Thanks to [kormax](https://github.com/kormax) for [apple-home-key-reader](https://github.com/kormax/apple-home-key-reader), which the previous Raspberry Pi version was based on and which made Home Key on DIY hardware possible.
 
 <br>
 

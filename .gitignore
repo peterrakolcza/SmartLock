@@ -30,3 +30,6 @@
 
 # Debug files
 *.dSYM/
+
+# graphify knowledge graph (local cache)
+graphify-out/
