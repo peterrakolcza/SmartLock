@@ -43,7 +43,7 @@ SW2 RESET:        EN to GND, R16 10k pull-up to 3V3, C6 1µF to GND
 
 The pin map matches `board.h` (`#if defined(ESP32)`): servo 4, clutch 5, servo power 6, reed 7, button 3, LED 10, battery ADC 0.
 
-The side button is deliberately not GPIO9. Holding it at power-on starts calibration, and on GPIO9 that would put the chip into download mode instead.
+The side button is deliberately not GPIO9. Holding it at power-on resets the learned turns, and on GPIO9 that would put the chip into download mode instead.
 
 ## Bill of materials
 

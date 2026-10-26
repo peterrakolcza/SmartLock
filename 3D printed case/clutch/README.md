@@ -37,7 +37,7 @@ PETG is recommended for the hub, slider and adapter. Use 4 walls and 40 % infill
    * **V3 board (USB):** SG90 signal goes to the **RX pin of the programming header** (GPIO3; the firmware switches Serial to TX only). SG90 + and − connect to the main servo's + and − (a Y cable or a soldered splice).
    * **V4 board (battery):** SG90 goes to the clutch header J2.
 
-## Calibration
+## Setting the clutch angles
 
 In `smart_lock.ino`:
 
@@ -50,11 +50,21 @@ In `smart_lock.ino`:
 Depending on which way your SG90 is mounted, the two angles may be swapped. Check with the thumb-turn:
 
 * **Open:** the thumb-turn turns freely all the way round.
-* **Closed:** the slider's teeth are fully in the adapter's slots. Go a few degrees past the point where they bottom out, so the SG90 keeps pushing. If the teeth land tooth-on-tooth, the main servo starts turning anyway and they drop in within 60°.
+* **Closed:** the slider's teeth are fully in the adapter's slots. Go a few degrees past the point where they bottom out, so the SG90 keeps pushing.
 
-Then run the normal lock / unlock calibration (hold the side button while powering on). The clutch closes automatically for it.
+That's the only setting. The lock / unlock movement itself learns the number of turns on its own, see step 8 of the main README.
 
-A movement now runs: close the clutch (350 ms) → turn → reverse the servo for 40 ms to unload the dog teeth → open the clutch.
+A movement runs: close the clutch (350 ms) → turn until the reed sensor has seen the magnet the learned number of times → reverse the servo for 40 ms to unload the teeth → open the clutch.
+
+## When the teeth don't line up
+
+After the key has been used, the thumb-turn can stop at any angle, so the teeth usually won't be over the slots. They only drop all the way in within ±4° of a slot. The 0.6 mm chamfers on the tooth tips and the slot entries widen that to about ±7°, and guide the teeth the rest of the way.
+
+1. The SG90 pushes the slider down. If the teeth sit on the flange between the slots, it just keeps pressing.
+2. The main servo starts turning, and the teeth slide over the flange until they reach the next slots. That is at most ~51° of servo rotation. Then they snap in.
+3. The servo drives the thumb-turn. It stops when the magnet has come round the learned number of times, not after a fixed time, so the angle spent finding the slots doesn't shorten the turn.
+
+`code/tests/motion/run.sh` simulates this for every offset from 0° to 59°. Every case locks fully and ends within ~6° of the home position.
 
 ## Changing the design
 

@@ -125,7 +125,7 @@ def frames():
         (1.6, "1", "Tap your iPhone or Apple Watch", "Home Key in Wallet, Express mode: no unlocking or Face ID needed"),
         (1.2, "2", "The reader authenticates the Home Key", "HomeKey-ESP32 is the native Apple Home lock accessory"),
         (1.6, "3", "Reader to lock: \"unlocking\"", "MQTT topic smartlock-reader/homekit/state = 4"),
-        (2.4, "4", "The lock closes its clutch and turns the thumb-turn", "Calibrated run time, then the clutch opens again"),
+        (2.4, "4", "The lock closes its clutch and turns the thumb-turn", "It stops when the magnet has come round the learned number of turns"),
         (1.6, "5", "Lock to reader: \"unlocked\"", "set_state = 0, only now Apple Home shows Unlocked"),
         (1.4, "5", "Lock to reader: \"unlocked\"", "set_state = 0, only now Apple Home shows Unlocked"),
         (2.4, "6", "Someone locks it with the key by hand", "The reed sensor counts the turn, the clutch lets the key turn freely"),

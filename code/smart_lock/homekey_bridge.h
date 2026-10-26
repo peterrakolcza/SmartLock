@@ -7,6 +7,7 @@
 //   <prefix>/homekit/state              reader -> lock   0 unlocked, 1 locked, 4 unlocking, 5 locking
 //   <prefix>/homekit/set_state          lock -> reader   0 / 1, real state of the lock (sets current + target)
 //   <prefix>/homekit/set_battery_lvl    lock -> reader   battery %, battery powered board only
+//   <prefix>/homekit/set_current_state  lock -> reader   2 = jammed (Apple Home shows a jam alert)
 //
 // HOMEKEY_MODE (set in smart_lock.ino):
 //   0  disabled, the lock works standalone (HTTP API + button)
@@ -31,10 +32,12 @@ static HomeKeyCommandHandler homekeyOnCommand = nullptr;
 static const String homekeyStateTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/state";
 static const String homekeySetStateTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/set_state";
 static const String homekeyBatteryTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/set_battery_lvl";
+static const String homekeyCurrentStateTopic = String(HOMEKEY_TOPIC_PREFIX) + "/homekit/set_current_state";
 
 // HomeKey-ESP32 lock states
 #define HK_UNLOCKED 0
 #define HK_LOCKED 1
+#define HK_JAMMED 2
 #define HK_UNLOCKING 4
 #define HK_LOCKING 5
 
@@ -353,6 +356,10 @@ void homekeyReportBattery(int percent) {
   homekeyBroker.publish(homekeyBatteryTopic, String(percent), true);
 }
 
+void homekeyReportJammed() {
+  homekeyBroker.publish(homekeyCurrentStateTopic, String(HK_JAMMED), false);
+}
+
 bool homekeyConnected() { return homekeyBroker.isConnected(); }
 
 #elif HOMEKEY_MODE == 2
@@ -403,6 +410,10 @@ void homekeyReportBattery(int percent) {
   if (homekeyMqtt.connected()) homekeyMqtt.publish(homekeyBatteryTopic.c_str(), String(percent).c_str(), true);
 }
 
+void homekeyReportJammed() {
+  if (homekeyMqtt.connected()) homekeyMqtt.publish(homekeyCurrentStateTopic.c_str(), String(HK_JAMMED).c_str());
+}
+
 bool homekeyConnected() { return homekeyMqtt.connected(); }
 
 #else
@@ -411,6 +422,7 @@ void homekeyBegin(HomeKeyCommandHandler) {}
 void homekeyLoop() {}
 void homekeyReportState(bool) {}
 void homekeyReportBattery(int) {}
+void homekeyReportJammed() {}
 bool homekeyConnected() { return false; }
 
 #endif

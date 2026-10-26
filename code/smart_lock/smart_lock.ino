@@ -1,6 +1,7 @@
 #include <ArduinoJson.h>
 #include <EEPROM.h>
 #include "board.h"
+#include "motion.h"
 
 int baseVersion = 4;
 
@@ -20,7 +21,6 @@ int counter = 0;
 #define STAPSK  "*************" // CHANGE THIS
 #endif
 
-const int numberOfTurnsRequired = 1; // CHANGE THIS
 bool previousStateWasHigh = true;
 
 // HomeKey / native Apple Home support with a HomeKey-ESP32 reader, see homekey/README.md
@@ -42,12 +42,12 @@ bool previousStateWasHigh = true;
 #define CLUTCH_SETTLE_MS 350     // time for the SG90 to move
 #define CLUTCH_RELIEF_MS 40      // short reverse of the main servo so the dogs are not loaded when releasing
 
-#define SETTINGS_MAGIC 0x5D10C3
+// No manual calibration: the first lock and the first unlock run until the thumb-turn stops and learn the number of
+// turns (counted by the reed sensor). Hold the side button while powering on to forget them and learn again.
+#define SETTINGS_MAGIC 0x5D10C4
 
-struct { 
-  // CALIBRATE
-  int TimeToLock = 1000;
-  int TimeToUnlock = 1000;
+struct {
+  MotionLearned learned;
   uint32_t magic = SETTINGS_MAGIC;
 } settings;
 
@@ -59,13 +59,9 @@ struct {
 //###                                                                   ###
 //#############################################################################################################################################
 bool locked = true;
+bool jammed = false;
 
-// A movement is a small state machine so the loop never blocks:
-// engage the clutch -> run the servo -> back off a little -> release the clutch -> settle
-enum Motion { IDLE, ENGAGING, MOVING, RELIEVING, RELEASING };
-Motion motion = IDLE;
-bool motionToLocked = true;
-unsigned long motionStartTime = 0;
+MotionController motion;
 
 void setClutch(bool closed) {
 #if USE_CLUTCH
@@ -74,82 +70,71 @@ void setClutch(bool closed) {
 #endif
 }
 
-void servosOff() {
-  servo.detach();
-  boardServoPinIdle(SERVOPIN);
+void runServo(int direction) {
+  if (direction == 0) {
+    servo.detach();
+    boardServoPinIdle(SERVOPIN);
+    return;
+  }
+  if (!servo.attached()) servo.attach(SERVOPIN);
+  servo.write(direction > 0 ? 180 : 1);
+}
+
+void servoPower(bool on) {
+  if (on) {
+    boardKeepAwake(true);
+    boardServoPower(true);
+    return;
+  }
 #if USE_CLUTCH
   clutch.detach();
   boardServoPinIdle(CLUTCHPIN);
 #endif
   boardServoPower(false);
+  boardKeepAwake(false);
 }
 
+bool reedActive() { return digitalRead(SENSOR) == LOW; }
+
 void startMotion(bool toLocked) {
-  if (motion != IDLE || locked == toLocked) return;
-  boardKeepAwake(true);
-  boardServoPower(true);
-  setClutch(true);
-  motionToLocked = toLocked;
-  motionStartTime = millis();
-  motion = ENGAGING;
+  if (motion.busy() || (locked == toLocked && !jammed)) return;
+  if (motion.start(toLocked, millis(), reedActive()) && motion.learning()) {
+    Serial.println(String("Learning: turning until the thumb-turn stops (") + (toLocked ? "lock" : "unlock") + ")");
+  }
 }
 
 void lock() { startMotion(true); }
 
 void unlock() { startMotion(false); }
 
-bool motionInProgress() { return motion != IDLE; }
+bool motionInProgress() { return motion.busy(); }
 
 void handleLockUnlock() {
-  unsigned long elapsed = millis() - motionStartTime;
-  unsigned long runTime = motionToLocked ? settings.TimeToLock : settings.TimeToUnlock;
+  if (!motion.busy()) return;
+  MotionResult result = motion.update(millis(), reedActive());
 
-  switch (motion) {
-    case IDLE:
-      break;
+  if (result == MOTION_DONE) {
+    locked = motion.targetLocked();
+    jammed = false;
+    Serial.println(String(locked ? "locked" : "unlocked") + " after " + String(motion.arrivals()) + " turn(s)");
+    homekeyReportState(locked);
+  } else if (result == MOTION_JAMMED) {
+    // Not where it should be: report it, a lock that didn't lock must not look locked
+    jammed = true;
+    locked = false;
+    Serial.println("JAMMED after " + String(motion.arrivals()) + " turn(s), is the door handle lifted?");
+    homekeyReportJammed();
+  }
 
-    case ENGAGING:
-      if (!USE_CLUTCH || elapsed >= CLUTCH_SETTLE_MS) {
-        servo.attach(SERVOPIN);
-        servo.write(motionToLocked ? 180 : 1);
-        motionStartTime = millis();
-        motion = MOVING;
-      }
-      break;
-
-    case MOVING:
-      if (elapsed >= runTime) {
-        servo.write(motionToLocked ? 1 : 180);
-        motionStartTime = millis();
-        motion = RELIEVING;
-      }
-      break;
-
-    case RELIEVING:
-      if (!USE_CLUTCH || elapsed >= CLUTCH_RELIEF_MS) {
-        servo.detach();
-        boardServoPinIdle(SERVOPIN);
-        setClutch(false);
-        locked = motionToLocked;
-
-        // Completed the movement, reset every state related variable
-        counter = 0;
-        previousStateWasHigh = false;
-        homekeyReportState(locked);
-
-        motionStartTime = millis();
-        motion = RELEASING;
-      }
-      break;
-
-    case RELEASING:
-      // The thumb-turn may still swing back a little, the sensor is ignored for another second
-      if (elapsed >= CLUTCH_SETTLE_MS + 1000) {
-        servosOff();
-        boardKeepAwake(false);
-        motion = IDLE;
-      }
-      break;
+  if (result == MOTION_DONE || result == MOTION_JAMMED) {
+    // Completed the movement, reset every state related variable
+    counter = 0;
+    previousStateWasHigh = false;
+    if (motion.learnedChanged) {
+      motion.learnedChanged = false;
+      saveSettings();
+      Serial.println("Learned: " + String(settings.learned.turnsToLock) + " turn(s) to lock, " + String(settings.learned.turnsToUnlock) + " to unlock, " + String(settings.learned.revolutionMs) + " ms per turn");
+    }
   }
 }
 
@@ -181,7 +166,7 @@ void handleNotFound() {
 
 void handleStatus() {
   char rsp[255];
-  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s,\"battery\":%d}", locked ? "locked" : "unlocked", homekeyConnected() ? "true" : "false", boardBatteryPercent());
+  sprintf(rsp, "{\"state\":\"%s\",\"homekey\":%s,\"battery\":%d}", jammed ? "jammed" : (locked ? "locked" : "unlocked"), homekeyConnected() ? "true" : "false", boardBatteryPercent());
 
   server.send(200, "application/json", rsp);
 }
@@ -220,7 +205,7 @@ void handleUpdate() {
       }
     }
     else if (state == "unlocked") {
-      if (locked) {
+      if (locked || jammed) {
         unlock();
 
         char rsp[255];
@@ -256,8 +241,9 @@ void handleUpdateLockState() {
     previousStateWasHigh = true;
   }
 
-  if (counter == numberOfTurnsRequired) {
+  if (counter >= motion.manualTurns()) {
     counter = 0;
+    jammed = false;
     if (locked) {
       locked = false;
       Serial.println("unlocked manually");
@@ -374,56 +360,21 @@ void flashLED() {
 //###                                                                   ###
 //#############################################################################################################################################
 
-void calibrate() {
-  Serial.println("Starting calibration...");
-  flashLED();
+void saveSettings() {
+  settings.learned = motion.learned;
+  EEPROM.put(0, settings); //write data to array in ram 
+  EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
+}
 
+// Holding the side button at power on: forget the learned turns, the next lock and unlock learn them again
+void relearn() {
+  Serial.println("Forgetting the learned turns, the next lock and unlock will learn them again");
+  flashLED();
+  motion.forget();
+  saveSettings();
   while (digitalRead(BUTTON) == LOW) {
     delay(50);
   }
-
-  boardKeepAwake(true);
-  boardServoPower(true);
-  setClutch(true);
-  delay(CLUTCH_SETTLE_MS);
-
-  unsigned long startTime = millis();
-  servo.attach(SERVOPIN);
-  servo.write(180);
-  while (digitalRead(BUTTON) == HIGH) {
-    delay(50);
-  }
-  servo.detach();
-  settings.TimeToLock = millis() - startTime - 1000;
-  if (settings.TimeToLock >= 100 && settings.TimeToLock <= 10000) Serial.println("New lock time: " + String(settings.TimeToLock) + " ms");
-  else {
-    settings.TimeToLock = 5000;
-    Serial.println("Invalid lock time, resetting back to default: 5000 ms");
-  }
-
-  flashLED();
-
-  startTime = millis();
-  servo.attach(SERVOPIN);
-  servo.write(1);
-  while (digitalRead(BUTTON) == HIGH) {
-    delay(50);
-  }
-  servo.detach();
-  settings.TimeToUnlock = millis() - startTime - 1000;
-  if (settings.TimeToUnlock >= 100 && settings.TimeToUnlock <= 10000) Serial.println("New unlock time: " + String(settings.TimeToUnlock) + " ms");
-  else {
-    settings.TimeToUnlock = 5000;
-    Serial.println("Invalid unlock time, resetting back to default: 5000 ms");
-  }
-
-  servosOff();
-  boardKeepAwake(false);
-
-  EEPROM.put(0, settings); //write data to array in ram 
-  EEPROM.commit();  //write data from ram to flash memory. Do nothing if there are no changes to EEPROM data in ram
-  
-  flashLED();
 }
 
 //#############################################################################################################################################
@@ -433,8 +384,7 @@ void calibrate() {
 //#############################################################################################################################################
 
 void onHomeKeyCommand(bool shouldLock) {
-  if (shouldLock && !locked) lock();
-  else if (!shouldLock && locked) unlock();
+  if (jammed || shouldLock != locked) startMotion(shouldLock);
   else homekeyReportState(locked); // already there, let the reader settle
 }
 
@@ -470,20 +420,26 @@ void setup() {
     Serial.println("MDNS responder started");
   }
 
+  MotionHardware hardware = {runServo, setClutch, servoPower};
+  motion.begin(hardware, USE_CLUTCH, CLUTCH_SETTLE_MS, CLUTCH_RELIEF_MS);
+
   EEPROM.begin(sizeof(settings));
   EEPROM.get(0, settings); //read data from array in ram and cast it into struct called settings
   if (settings.magic != SETTINGS_MAGIC) {
-    // Never calibrated, the flash holds garbage
-    settings.TimeToLock = 1000;
-    settings.TimeToUnlock = 1000;
+    // Nothing learned yet (or settings from an older firmware)
+    settings.learned = MotionLearned();
     settings.magic = SETTINGS_MAGIC;
   }
-  Serial.println("Current lock time: " + String(settings.TimeToLock) + " ms");
-  Serial.println("Current unlock time: " + String(settings.TimeToUnlock) + " ms");
+  motion.learned = settings.learned;
+  if (motion.learned.turnsToLock == 0 || motion.learned.turnsToUnlock == 0) {
+    Serial.println("Turns not learned yet, the first lock and unlock will learn them");
+  } else {
+    Serial.println("Learned: " + String(motion.learned.turnsToLock) + " turn(s) to lock, " + String(motion.learned.turnsToUnlock) + " to unlock");
+  }
 
   delay(3000);
   if (digitalRead(BUTTON) == LOW) {
-    calibrate();
+    relearn();
   }
 
   homekeyBegin(onHomeKeyCommand);

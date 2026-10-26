@@ -51,21 +51,17 @@ git clone https://github.com/peterrakolcza/SmartLock.git
 #define STAPSK  "*****" // CHANGE THIS
 #endif
 
-const int numberOfTurnsRequired = 1; // CHANGE THIS
-
 #define HOMEKEY_MODE 1 // 0 = standalone, 1 = HomeKey reader connects directly, 2 = external MQTT broker
 #define USE_CLUTCH 1   // 0 = original direct drive, 1 = with the clutch servo
 ```
 6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -e smartlock -t upload`, or `-e smartlock-battery` for the battery board)
 7. Assemble the whole lock
-8. Calibration: 
-     -  it is highly recommended to calibrate the smart lock at first boot by holding down side-button while powering it on. 
-     - Before the calibration it will flash 3 times. 
-     - After that it will try to lock the door until the user presses the side-button. 
-     - It will flash 3 times again. 
-     - Finally, it will try to unlock the door until the button is pressed. 
-     - It will flash 3 times to indicate the end of the calibration process.
-     - The smart lock now registered and saved the amount of time required to lock / unlock the door.
+8. No calibration needed:
+     - Put the magnet in the thumb-turn adapter so it is in front of the reed sensor when the thumb-turn is in its home position (where the key can be inserted and removed).
+     - Start with the door unlocked. Then lock it once and unlock it once (button, app or HTTP API). On these first two moves the lock keeps turning until the thumb-turn stops at its end stop, counts the turns with the reed sensor and remembers them.
+     - From then on every move stops when the magnet has come round the learned number of times, so the thumb-turn always ends in the home position. Servo speed, battery level and the clutch finding its slots no longer matter.
+     - If the magnet doesn't come round in time (door handle not lifted, bolt blocked), the lock stops, reports **jammed** (Apple Home shows a jam alert, the API returns `"state":"jammed"`) and never claims to be locked.
+     - To learn again (another door, moved magnet): hold the side button while powering on. The LED flashes 3 times.
 9. Use it standalone (button + HTTP API), add it to Apple Home with Home Key using the [HomeKey-ESP32 reader](homekey/README.md), or integrate it with Homebridge
 
 <br>
@@ -111,7 +107,7 @@ The battery powered V4 board (ESP32-C3) has its own pin map, see [`PCB/V4-low-po
 
 A lift-up handle on a smart lock can introduce several challenges that affect usability, compatibility, and security. One primary issue is user convenience. The necessity to lift the handle adds an extra step to the process of locking or unlocking the door, which can be particularly inconvenient when users' hands are full, they are in a hurry, or when it's dark. This could prevent the smart lock to properly lock the door.
 
-_A future feature is planned to solve this issue, by automatically falling back to unlocked state when locking failed._
+The lock now detects this: if the thumb-turn stops before the learned number of turns, it reports **jammed** instead of locked (Apple Home shows a jam alert). The lock never claims to be locked when it isn't, and the next lock command simply tries again.
 
 <br>
 
@@ -127,7 +123,7 @@ Without the clutch, turning the key or the thumb-turn by hand means back-driving
 
 <img src="images/clutch_render.png" width="640" />
 
-See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly and calibration.
+See [the clutch guide](3D%20printed%20case/clutch/README.md) for parts, assembly and setup.
 
 <br>
 

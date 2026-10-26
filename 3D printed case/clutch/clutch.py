@@ -46,6 +46,7 @@ TOOTH_HEIGHT = 2.5
 TOOTH_R_IN = 8.8
 TOOTH_R_OUT = 14.0
 TRAVEL = 3.5              # slider stroke, tooth height + 1 mm clearance when open
+CHAMFER = 0.6             # 45 deg chamfer on the tooth tips and the slot entries, guides slightly misaligned teeth in
 
 # Hub: hex shaft from the servo horn
 HEX_AF = 14.0             # across flats
@@ -125,6 +126,27 @@ def sectors(count, width_deg, r_in, r_out, z0, z1):
     return result
 
 
+def tapered_sectors(count, width_low, width_high, r_in, r_out, z0, z1, pieces=8):
+    """Like sectors(), but the angular width changes linearly from z0 to z1 (for chamfers). Built from convex hulls."""
+    result = Manifold()
+    for i in range(count):
+        centre = 360.0 * i / count
+        for k in range(pieces):
+            slabs = []
+            for width, z in ((width_low, z0), (width_high, z1)):
+                a0 = math.radians(centre - width / 2 + width * k / pieces)
+                a1 = math.radians(centre - width / 2 + width * (k + 1) / pieces)
+                quad = [(r_in * math.cos(a0), r_in * math.sin(a0)), (r_out * math.cos(a0), r_out * math.sin(a0)),
+                        (r_out * math.cos(a1), r_out * math.sin(a1)), (r_in * math.cos(a1), r_in * math.sin(a1))]
+                slabs.append(CrossSection([quad]).extrude(0.001).translate((0, 0, z)))
+            result += Manifold.hull(slabs[0] + slabs[1])
+    return result
+
+
+def chamfer_degrees():
+    return math.degrees(CHAMFER / ((TOOTH_R_IN + TOOTH_R_OUT) / 2))
+
+
 def from_stl(path):
     mesh = trimesh.load(path)
     return Manifold(Mesh(vert_properties=np.asarray(mesh.vertices, dtype=np.float32),
@@ -170,7 +192,9 @@ def knob_adapter():
     adapter = filled.rotate((180, 0, 0)).translate((0, 0, FLANGE_BOTTOM))
 
     flange = cylinder(FLANGE_RADIUS, FLANGE_BOTTOM - 0.01, FLANGE_TOP)
-    flange -= sectors(TEETH, SLOT_ANGLE, TOOTH_R_IN - 0.6, TOOTH_R_OUT + 0.6, FLANGE_TOP - TOOTH_HEIGHT, FLANGE_TOP + 1)
+    slot_r = (TOOTH_R_IN - 0.6, TOOTH_R_OUT + 0.6)
+    flange -= sectors(TEETH, SLOT_ANGLE, *slot_r, FLANGE_TOP - TOOTH_HEIGHT, FLANGE_TOP + 1)
+    flange -= tapered_sectors(TEETH, SLOT_ANGLE, SLOT_ANGLE + 2 * chamfer_degrees(), *slot_r, FLANGE_TOP - CHAMFER, FLANGE_TOP + 0.001)
     flange -= cylinder(PILOT_DIAMETER / 2 + FIT, FLANGE_BOTTOM - 4, FLANGE_TOP + 1, 48)
     # The original STL contains a few loose slivers inside its pockets, keep the main body only
     return max((adapter + flange).decompose(), key=lambda piece: piece.volume())
@@ -194,7 +218,8 @@ def slider(z_bottom):
     body = cylinder(SLIDER_RADIUS, TOOTH_HEIGHT, SLIDER_HEIGHT)
     groove_low = TOOTH_HEIGHT + 2.0
     body -= cylinder(SLIDER_RADIUS + 1, groove_low, groove_low + GROOVE_HEIGHT) - cylinder(GROOVE_RADIUS, groove_low - 1, groove_low + GROOVE_HEIGHT + 1)
-    teeth = sectors(TEETH, TOOTH_ANGLE, TOOTH_R_IN, TOOTH_R_OUT, 0, TOOTH_HEIGHT + 0.01)
+    teeth = sectors(TEETH, TOOTH_ANGLE, TOOTH_R_IN, TOOTH_R_OUT, CHAMFER, TOOTH_HEIGHT + 0.01)
+    teeth += tapered_sectors(TEETH, TOOTH_ANGLE - 2 * chamfer_degrees(), TOOTH_ANGLE, TOOTH_R_IN, TOOTH_R_OUT, 0, CHAMFER + 0.001)
     part = body + teeth
     part -= hexagon(HEX_AF + 2 * FIT, -1, SLIDER_HEIGHT + 1)
     assert hex_radius < TOOTH_R_IN
