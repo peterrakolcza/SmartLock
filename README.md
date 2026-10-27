@@ -113,7 +113,7 @@ The lock now detects this: if the thumb-turn stops before the learned number of 
 
 ## 🧭 v5: self-adhesive, universal, battery powered
 
-Designed end to end on this branch ([`docs/v5.md`](docs/v5.md)): self-adhesive (3M VHB, nothing screwed to the door), universal (three base presets, an adapter with two screw jaws for most thumb-turns), a 1200 mAh pouch with USB-C charging, an N20 gearmotor with a self-locking worm over the spiral coupling, and Matter over Thread on an ESP32-C6. 78 × 63 mm from the door. The CAD passes 40 fit / motion / strength / printability checks, the PCB is generated, routed and DRC-checked in KiCad, and the firmware (ESP-IDF + esp-matter, Thread sleepy end device) builds; none of it is built and tested on a door yet.
+Designed end to end on this branch ([`docs/v5.md`](docs/v5.md)): self-adhesive (3M VHB, nothing screwed to the door), universal (three base presets, an adapter with two screw jaws for most thumb-turns), a 1200 mAh pouch with USB-C charging, an N20 gearmotor with a self-locking worm over the spiral coupling, and Matter over Thread on an ESP32-C6. 78 × 63 mm from the door. The CAD passes 41 fit / motion / strength / printability checks, the PCB is generated, routed and DRC-checked in KiCad, and the firmware (ESP-IDF + esp-matter, Thread sleepy end device) builds; none of it is built and tested on a door yet.
 
 <img src="images/v5_cutaway.png" width="640" />
 

@@ -18,7 +18,8 @@ ALLOWED = {frozenset(p) for p in [
     ("shaft", "hub"),                # pressed in
     ("worm", "wheel"),               # the mesh
     ("worm", "motor"),               # worm on the motor shaft
-    ("worm", "deck"),                # worm shaft in its end bearing
+    ("worm", "deck"),                # worm on its end-bearing pin
+    ("shaft", "wheel"),              # the wheel's bore on the shaft
     ("dowels", "hub"),               # pressed in
     ("dowels", "wheel"),
 ]}
@@ -227,7 +228,7 @@ def adhesive():
     section("Self-adhesive base (3M VHB 4910/5952): shear from the motor, peel from the weight")
     tau = 0.10e6            # design shear stress, Pa (VHB is rated ~0.5 MPa dynamic; 5x margin)
     sigma = 0.10e6          # design tension
-    torque = 1.2            # N m, motor stall with the current limit
+    torque = k.T_MAX        # N m, motor stall with the current limit
     masses = {"printed parts (PETG, 1.27 g/cm3)": None, "motor + worm": 12.0, "pouch": 23.0, "PCB": 6.0, "wheel, shaft, magnets, screws": 6.0}
     L = k.layout(k.DOORS["rosette"])
     printed = sum(p.volume() for p in (k.case(L), k.adapter(L), k.jaws(L), k.hub(L), k.deck(L), k.cap(L))) / 1000 * 1.27
@@ -247,7 +248,7 @@ def adhesive():
         cap_m = sigma * area * 1e-6 / 2 * (k.CASE_R * 0.6e-3)
         ok = cap_t > torque and cap_m > peel_moment * 3
         report(f"{name}: {area / 100:.0f} cm2 of tape", ok,
-               f"holds {cap_t:.1f} N m twist (motor max {torque} N m), weight moment {peel_moment:.2f} N m vs {cap_m:.1f} N m")
+               f"holds {cap_t:.1f} N m twist (motor max {torque:.2f} N m), weight moment {peel_moment:.2f} N m vs {cap_m:.1f} N m")
     print(f"  (lock mass about {mass * 1000:.0f} g)")
 
 
@@ -270,23 +271,23 @@ def printability():
 
 
 def strength():
-    section("Strength along the torque path at the motor's maximum (current-limited) torque")
-    T = 1.2              # N m at the thumb-turn
+    section(f"Strength along the torque path at the motor's maximum (current-limited) torque, {k.T_MAX:.2f} N m")
+    T = k.T_MAX          # N m at the thumb-turn
     allow = 25.0         # MPa, PETG (yield ~50) with a 2x margin
     rows = []
     # pin at the inner end of the spiral: bearing on the groove wall and on the follower
     f_pin = T / (k.SPIRAL_R_IN * 1e-3)
     rows.append(("steel pin on the spiral end wall (bearing)", f_pin / (k.PIN_D * (k.GROOVE_DEPTH - 0.3)), allow))
     rows.append(("follower block in the adapter slot (bearing)", T / (k.R_OUT * 0.5e-3 + k.SPIRAL_R_IN * 0.5e-3) / (k.BLOCK[1] * 2.9), allow))
-    # worm wheel -> hub: two 2 mm steel dowels at r 6 mm, bearing on the printed hub
-    f_dowel = T / (6.0e-3) / 2
+    # worm wheel -> hub: two 2 mm steel dowels through the wheel's ring, 4.5 mm into the printed hub
+    f_dowel = T / (k.DOWEL_R * 1e-3) / 2
     rows.append(("dowel holes in the hub (bearing)", f_dowel / (2.0 * 4.5), allow))
     # bayonet: 3 lugs at r 33 mm
     f_lug = T / (k.SPIGOT[1] * 1e-3) / 3
     rows.append(("bayonet lug root (shear)", f_lug / (k.LUG[0] * (k.LUG[2] + k.LUG[1])), allow / 2))
-    # worm wheel teeth: bought brass wheel (Lewis, Y = 0.3, ~1.5 teeth in contact), brass allowable ~100 MPa
+    # worm wheel teeth: bought steel wheel (Lewis, Y = 0.3, ~1.5 teeth in contact), steel 45 allowable ~200 MPa
     f_tooth = T / (k.WHEEL_PITCH_R * 1e-3) / 1.5
-    rows.append((f"brass worm wheel teeth, module {k.WHEEL['module']} (bending)", f_tooth / (k.WHEEL["face"] * k.WHEEL["module"] * 0.3), 100.0))
+    rows.append((f"steel worm wheel teeth, module {k.WHEEL['module']} (bending)", f_tooth / (k.WHEEL["face"] * k.WHEEL["module"] * 0.3), 200.0))
     for name, stress, limit in rows:
         report(name, stress < limit, f"{stress:.1f} MPa (limit {limit:.0f})")
 

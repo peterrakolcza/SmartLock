@@ -65,6 +65,8 @@ PIN_D = 3.0
 GROOVE_W = PIN_D + 0.4
 GROOVE_DEPTH = 2.6
 HUB_FLOOR = 1.4
+HUB_NECK_R = 9.2            # the wheel sits on it; 2 dowels at DOWEL_R go through the wheel into it
+DOWEL_R = 7.2
 SLOT_ANGLE = 90.0
 BLOCK = (5.8, 4.6, 2.9)
 R_OUT = SPIRAL_R_IN + SPIRAL_PITCH * SPIRAL_TURNS
@@ -72,14 +74,19 @@ HUB_R = R_OUT + GROOVE_W / 2 + 1.6
 FREE_PLAY = SPIRAL_TURNS * 360.0
 
 # ---------------------------------------------------------------------------------------------------- bought drive parts
-WHEEL = dict(module=0.6, teeth=30, face=6.0, bore=3.0)        # brass worm wheel, 30:1 with a single-start steel worm
+# AliExpress "1:40 steel worm gear 0.5M 40T 6MM" set (docs/v5-parts.md): steel 40T wheel with a set-screw boss and
+# the "065" brass worm (6.7 mm, 3 mm bore, 12 mm long). The boss and ring sizes are read off the photos: measure
+# yours and set them here, the hub's neck follows.
+WHEEL = dict(module=0.5, teeth=40, face=3.5, bore=6.0, boss_d=11.0, boss_h=4.5)   # boss faces down, onto the hub
 WHEEL_PITCH_R = WHEEL["module"] * WHEEL["teeth"] / 2
 WHEEL_OUT_R = WHEEL_PITCH_R + WHEEL["module"]
-WORM = dict(pitch_r=3.3, length=13.0)                        # steel worm, module 0.6, 3 mm bore on the motor's D-shaft
-MOTOR = dict(gearbox=9.0, can=15.0, width=10.0, height=12.0, tail=1.5)   # N20, 10 wide x 12 tall lying flat
+WORM = dict(pitch_r=2.85, od=6.7, length=12.0, bore=3.0)     # single start, set screw on the motor's 3 mm D-shaft
+MOTOR = dict(gearbox=9.0, can=15.0, width=10.0, height=12.0, tail=1.5, ratio=30)  # N20 6 V 1000 RPM, lying flat
 CENTRE = WHEEL_PITCH_R + WORM["pitch_r"]                     # worm axis to lock axis
+# Torque at the thumb-turn when the DRV8833 limits the current (1.33 A): 1.2 N m was worked out for 50:1 x 30:1
+T_MAX = 1.2 * MOTOR["ratio"] * WHEEL["teeth"] / 1500.0
 POUCH = (50.0, 34.0, 6.0)                                    # 603450 Li-ion pouch, 1200 mAh
-SHAFT_D = 3.0
+SHAFT_D = 6.0                                                # plain 6 mm steel rod: the axle, held by the wheel's set screw
 KNOB_MAGNET = (5.0, 2.0)                                     # diametric no: axial disc magnets
 HUB_MAGNET = (3.0, 2.0)
 KNOB_MAGNET_R = 27.5
@@ -120,7 +127,7 @@ def layout(door):
     drive0 = spiral_top + 1.45                      # the hall sensors (SOT-23, 1.12 mm) hang under the PCB
     wheel_mid = drive0 + MOTOR["height"] / 2
     drive1 = drive0 + MOTOR["height"]
-    deck0 = drive1 + 0.3
+    deck0 = max(drive1 + 0.3, wheel_mid + WHEEL["face"] / 2 + WHEEL["boss_h"] + 0.4)   # clear of the wheel's boss
     pouch0 = deck0 + DECK_T + 0.2
     cap0 = pouch0 + POUCH[2] + 0.2
     return Layout(b, A, hub0, spiral_top, drive0, wheel_mid, drive1, deck0, pouch0, cap0, cap0 + CAP_T)
@@ -209,35 +216,34 @@ def motor_model(L):
     return body + tail
 
 
-WORM_X = (-8.0, 6.1)
+WORM_X = (6.1 - WORM["length"], 6.1)   # far end (against the deck's end bearing), motor end (0.5 mm off the gearbox)
 
 
 def worm_model(L):
-    r = WORM["pitch_r"] + WHEEL["module"]
-    return cyl_x(r, WORM_X[0] + 1.5, WORM_X[1], CENTRE, L.wheel_mid) + cyl_x(1.0, WORM_X[0], WORM_X[1] + 0.6, CENTRE, L.wheel_mid, 16)
+    return (cyl_x(WORM["od"] / 2, WORM_X[0], WORM_X[1], CENTRE, L.wheel_mid)
+            - cyl_x(WORM["bore"] / 2, WORM_X[0] - 1, WORM_X[1] + 1, CENTRE, L.wheel_mid, 16))
 
 
 def wheel_model(L, h=0.0):
     z0, z1 = L.wheel_mid - WHEEL["face"] / 2, L.wheel_mid + WHEEL["face"] / 2
     root = WHEEL_PITCH_R - 1.25 * WHEEL["module"]
-    wheel = cyl(root, z0, z1, 64) - cyl(WHEEL["bore"] / 2, z0 - 1, z1 + 1, 24)
-    tooth = cube(-0.4, 0.4, root - 0.1, WHEEL_OUT_R, z0, z1)
+    wheel = cyl(root, z0, z1, 64) + cyl(WHEEL["boss_d"] / 2, z1 - 0.01, z1 + WHEEL["boss_h"], 48)   # boss up
+    wheel -= cyl(WHEEL["bore"] / 2, z0 - 1, z1 + WHEEL["boss_h"] + 1, 32)
+    for a in (0.0, 180.0):                                                     # 2 x 2.2 mm holes drilled through the ring
+        wheel -= cyl(1.1, z0 - 1, z1 + 1, 16, *polar(DOWEL_R, a))
+    tooth = cube(-0.35, 0.35, root - 0.1, WHEEL_OUT_R, z0, z1)
     for i in range(WHEEL["teeth"]):
         wheel += tooth.rotate((0, 0, 360.0 * i / WHEEL["teeth"]))
-    # two 2.2 mm holes drilled through the web: pins into the hub
-    for a in (0.0, 180.0):
-        x, y = polar(6.0, a)
-        wheel -= cyl(1.1, z0 - 1, z1 + 1, 16, x, y)
     return wheel.rotate((0, 0, h))
 
 
 def dowels_model(L, h=0.0):
     z = L.wheel_mid - WHEEL["face"] / 2
-    return (cyl(1.0, z - 4.5, z + 3.5, 16, 6.0, 0.0) + cyl(1.0, z - 4.5, z + 3.5, 16, -6.0, 0.0)).rotate((0, 0, h))
+    return sum((cyl(1.0, z - 4.5, z + WHEEL["face"], 16, *polar(DOWEL_R, a)) for a in (0.0, 180.0)), Manifold()).rotate((0, 0, h))
 
 
 def shaft_model(L):
-    return cyl(SHAFT_D / 2, L.A - 3.0, L.deck0 + DECK_T - 0.1, 24)   # its lower end is the journal in the adapter
+    return cyl(SHAFT_D / 2, L.A - 3.0, L.deck0 + DECK_T - 0.1, 32)   # its lower end is the journal in the adapter
 
 
 def pouch_model(L):
@@ -368,32 +374,32 @@ def hub(L, h=0.0):
     """Spiral groove underneath, hub magnet, seat for the bought worm wheel on top."""
     part = cyl(HUB_R, L.hub0, L.spiral_top)
     part -= spiral_groove(L.hub0 - 1, L.hub0 + GROOVE_DEPTH)
-    part += cyl(5.5, L.spiral_top - 0.01, L.wheel_mid - WHEEL["face"] / 2, 48)  # neck up to the wheel
-    for a in (0.0, 180.0):                                                     # 2 x 8 mm steel dowels into the wheel web
-        x, y = polar(6.0, a)
-        part -= cyl(0.95, L.wheel_mid - WHEEL["face"] / 2 - 5.0, L.wheel_mid, 16, x, y)
-    part -= cyl(SHAFT_D / 2 - 0.05, L.hub0 - 4, L.wheel_mid, 24)               # steel shaft, pressed in
+    part += cyl(HUB_NECK_R, L.spiral_top - 0.01, L.wheel_mid - WHEEL["face"] / 2, 48)   # neck: the wheel sits on it
+    for a in (0.0, 180.0):                                                     # 2 x 8 mm steel dowels through the wheel
+        part -= cyl(0.95, L.wheel_mid - WHEEL["face"] / 2 - 5.0, L.wheel_mid, 16, *polar(DOWEL_R, a))
+    part -= cyl(SHAFT_D / 2 - 0.05, L.hub0 - 4, L.wheel_mid, 32)               # steel shaft, pressed in
     hx, hy = polar(HUB_MAGNET_R, hub_magnet_angle())
     part -= cyl(HUB_MAGNET[0] / 2 + 0.1, L.spiral_top - HUB_MAGNET[1] - 0.2, L.spiral_top + 1, 24, hx, hy)
     return part.rotate((0, 0, h))
 
 
+
 def deck(L):
-    """Over the drive layer: shaft bushing, motor clamp, worm end bearing; the pouch sits on it."""
+    """Over the drive layer: top shaft journal, motor clamp, worm end bearing; the pouch sits on it."""
     z0, z1 = L.deck0, L.deck0 + DECK_T
     part = cyl(BORE_R - 0.3, z0, z1)
-    part += cyl(3.5, z0 - 3.0, z1, 32)                                         # bushing boss
-    part -= cyl(SHAFT_D / 2 + 0.1, z0 - 4, z1 + 1, 24)
-    # Worm end bearing: hanger down to the worm axis
-    hx0 = WORM_X[0] - 2.4
-    hanger = cube(hx0, WORM_X[0] + 0.6, CENTRE - 3.0, CENTRE + 3.0, L.wheel_mid - 3.0, z0 + 0.01)
-    hanger -= cyl_x(1.15, hx0 - 1, WORM_X[0] + 1, CENTRE, L.wheel_mid, 16)
+    part -= cyl(SHAFT_D / 2 + 0.1, z0 - 4, z1 + 1, 32)
+    # Worm end bearing: a hanger with a pin into the worm's bore. The worm sits between the hanger face and the
+    # gearbox face, so both take the worm's thrust (the N20's output bushing isn't made for it).
+    face = WORM_X[0] - 0.3
+    hanger = cube(face - 2.4, face, CENTRE - 3.0, CENTRE + 3.0, L.wheel_mid - 3.0, z0 + 0.01)
+    hanger += cyl_x(WORM["bore"] / 2 - 0.15, face - 0.01, WORM_X[0] + 2.0, CENTRE, L.wheel_mid, 16)
     # Motor clamp: cheeks down beside the gearbox
     x0 = WORM_X[1] + 0.5
     cheeks = Manifold()
     for y0, y1 in ((CENTRE + MOTOR["width"] / 2 + 0.1, CENTRE + MOTOR["width"] / 2 + 1.8),
                    (CENTRE - MOTOR["width"] / 2 - 1.8, CENTRE - MOTOR["width"] / 2 - 0.1)):
-        cheeks += cube(x0 + 1.0, x0 + MOTOR["gearbox"] - 1.0, y0, y1, L.wheel_mid - 2.0, z0 + 0.01)
+        cheeks += cube(x0 + 2.5, x0 + MOTOR["gearbox"] - 0.5, y0, y1, L.wheel_mid - 2.0, z0 + 0.01)   # clear of the wheel
     part += hanger + cheeks
     for x, y in board.CLAMPS:                                                  # posts that hold the PCB down
         part += cyl(1.6, L.drive0 + board.THICKNESS + 0.05, z0 + 0.01, 16, x, y)
@@ -461,6 +467,15 @@ def light_pipe(L):
     return cyl(1.5, L.drive0 + board.THICKNESS + 0.7, L.top - 0.01, 24, dx, dy)
 
 
+def wheel_drill_jig(L, door=None):
+    """Slips over the wheel's boss and rests on the toothed ring: guides the two 2.2 mm dowel holes."""
+    t = 4.0
+    jig = cyl(WHEEL_OUT_R + 1.5, 0.0, WHEEL["boss_h"] + t) - cyl(WHEEL["boss_d"] / 2 + 0.15, -1, WHEEL["boss_h"] + 0.01)
+    for a in (0.0, 180.0):
+        jig -= cyl(1.1, -1, WHEEL["boss_h"] + t + 1, 16, *polar(DOWEL_R, a))
+    return jig
+
+
 def install_jig(L, door):
     """Centres the base on the thumb-turn while the tape sets: sits in the base, the wing goes through its slot."""
     b = door.base_h
@@ -515,6 +530,7 @@ PRINT = {   # part: (function, print rotation)
     "deck": (lambda L, d: deck(L), (180, 0, 0)),
     "cap": (lambda L, d: cap(L), (180, 0, 0)),
     "light_pipe": (lambda L, d: light_pipe(L), (0, 0, 0)),
+    "wheel_drill_jig": (lambda L, d: wheel_drill_jig(L), (180, 0, 0)),
 }
 PER_DOOR = {
     "base": (lambda L, d: base(L, d), (0, 0, 0)),

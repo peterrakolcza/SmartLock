@@ -49,8 +49,8 @@ def cutaway():
         ("cap + light pipe", (-10, 0, L.top)),
         ("1200 mAh Li-ion pouch (USB-C charging)", (-20, -3, L.pouch0 + 3)),
         ("deck", (-30, 0, L.deck0 + 0.6)),
-        ("N20 gearmotor + steel worm", (16, k.CENTRE - 5, L.wheel_mid)),
-        ("brass worm wheel 30:1", (0, -k.WHEEL_OUT_R, L.wheel_mid)),
+        ("N20 gearmotor + brass worm", (16, k.CENTRE - 5, L.wheel_mid)),
+        ("steel worm wheel 40:1, pinned to the hub", (0, -k.WHEEL_OUT_R, L.wheel_mid)),
         ("crescent PCB: ESP32-C6, Matter over Thread", (-25, -5, L.drive0 + 1)),
         ("spiral hub", (-k.HUB_R * 0.7, -k.HUB_R * 0.7, L.hub0 + 2)),
         ("universal adapter: 2 screw jaws", (-20, -14, L.A - 12)),
@@ -64,7 +64,7 @@ def exploded():
     scene = Scene(1400, 1100)
     parts = k.assembly("rosette", h=135.0)
     offsets = {"base": -10, "thumb_turn": -10, "adapter": 0, "jaws": 0, "knob_magnet": 0, "follower": 8, "pin": 8,
-               "hub": 18, "hub_magnet": 18, "shaft": 18, "dowels": 26, "wheel": 26, "worm": 34, "motor": 34, "pcb": 44,
+               "hub": 18, "hub_magnet": 18, "shaft": 18, "wheel": 26, "worm": 34, "motor": 34, "pcb": 44,
                "deck": 56, "light_pipe": 66, "pouch": 66, "cap": 80, "case": 30}
     exp = {n: (p.translate((0, 0, offsets.get(n, 0) * 1.4)), c) for n, (p, c) in parts.items()}
     render(scene, exp, cut={"case"})

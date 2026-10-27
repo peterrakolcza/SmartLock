@@ -8,10 +8,10 @@ Everything for one lock, apart from the printed parts and the PCB. Prices are fr
 
 | # | Part | Qty | What to pick | Where | Price |
 | :-: | :-- | :-: | :-- | :-- | --: |
-| 1 | N20 gearmotor, metal gearbox | 1 (+1 spare) | **6 V, 600 RPM** (= 50:1 on the common 30 000 rpm motor), 3 mm D-shaft, 10 mm shaft | [listing, 10 000+ sold](https://www.aliexpress.com/item/1005010285600111.html) | HUF 1 547 |
-| 2 | Worm + worm wheel, brass, module 0.5 | 1 set | see [the note below](#worm-gear-set) | [0.5 modulus worm gear kits](https://www.aliexpress.com/w/wholesale-0.5-modulus-worm-gear-kit-brass.html), [worm with 2.98 mm bore](https://www.aliexpress.com/item/1005009888773776.html) | HUF 436 (worm), set ~HUF 2 200-3 000 |
-| 3 | Steel shaft Ø 3 mm | 1 | hub axle, cut to **22 mm** | [search: 3mm steel rod shaft 50mm](https://www.aliexpress.com/w/wholesale-3mm-steel-rod-shaft-50mm.html) | |
-| 4 | Steel dowel pins Ø 2 × 8 mm | 2 | worm wheel → hub (drill two Ø 2.2 holes through the wheel web at r = 6 mm) | [search: dowel pin 2x8 stainless](https://www.aliexpress.com/w/wholesale-dowel-pin-2x8-stainless.html) | |
+| 1 | N20 gearmotor, metal gearbox | 1 (+1 spare) | **6 V, 1000 RPM** (= 30:1 on the common 30 000 rpm motor), 3 mm D-shaft. 600 RPM only for a stiff door, see `docs/v5.md` | [listing, 10 000+ sold](https://www.aliexpress.com/item/1005010285600111.html) | from HUF 1 547 |
+| 2 | Worm gear set, module 0.5, 1:40: steel 40T wheel + brass worm | 1 set | **Number of teeth: "40 Teeth-6mm"**, **hole diameter: "A Worm-3mm"** (the 6.7 × 12 mm "065" worm with a 3 mm bore). See [the note below](#worm-gear-set) | [listing](https://www.aliexpress.com/item/1005008008683119.html) | HUF 2 683 |
+| 3 | Steel rod Ø 6 mm (linear shaft) | 1 | hub axle, cut to **22.5 mm**, the wheel's set screw holds it | [search: 6mm linear shaft 50mm](https://www.aliexpress.com/w/wholesale-6mm-linear-shaft-50mm.html) | |
+| 4 | Steel dowel pins Ø 2 × 8 mm | 2 | worm wheel → hub: drill two Ø 2.2 mm holes through the wheel's toothed ring with the printed `wheel_drill_jig` | [search: dowel pin 2x8 stainless](https://www.aliexpress.com/w/wholesale-dowel-pin-2x8-stainless.html) | |
 | 5 | Steel dowel pin Ø 3 × 5 mm | 1 | spiral follower pin | [search: dowel pin 3x5 stainless](https://www.aliexpress.com/w/wholesale-dowel-pin-3x5-stainless.html) | |
 
 ## Sensing, power, wiring
@@ -41,7 +41,14 @@ PETG for all parts (about 60 g per lock), plus a few grams of **clear** PETG for
 
 ## Worm gear set
 
-The CAD was designed around a module 0.6 worm set, but on AliExpress module 0.6 only comes as spur pinions. Worm sets are module 0.5. Before ordering #2, the CAD has to move to module 0.5 so the worm-to-wheel centre distance and the tooth strength check match the real part. Smaller teeth are weaker, so the wheel's face width decides between a 30T wheel (faster) and a 40T wheel (more tooth margin, 33 % slower). **Don't order #2 until that's settled.**
+Module 0.6 worm sets, which the first CAD used, aren't sold on AliExpress. The CAD now uses this module-0.5 set:
+
+* **Steel 40T wheel**, Ø 21 mm, 6 mm bore, with a set-screw boss on one side. The boss faces up, toward the deck, and its set screw holds the wheel on the 6 mm axle.
+* **The torque goes through two 2 × 8 mm dowels**, not the set screw. Slip the printed `wheel_drill_jig` over the boss and drill the two 2.2 mm holes through the toothed ring. The steel is ordinary carbon steel: use a sharp HSS bit and a little oil. Then press the dowels through the wheel into the hub.
+* **The brass worm** has a set screw onto the N20's 3 mm D-shaft. The printed end bearing on the deck puts a pin into the worm's free end and takes its thrust.
+* With the 1000 RPM (30:1) motor that's 1200:1 overall and up to ~0.96 N·m at the thumb-turn. The tooth stress is 122 of 200 MPa in `checks.py`.
+
+**Check before printing the hub and deck:** the wheel's boss (about Ø 11 × 4.5 mm) and ring (about 3.5 mm thick) are read off the seller's photos. Measure yours, set `WHEEL` in `3D printed case/v5/lock.py` and run `python lock.py`. It moves the deck if needed, re-exports the STLs and re-runs the checks.
 
 ## PCB chips (only for hand assembly)
 
