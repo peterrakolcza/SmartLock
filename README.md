@@ -11,7 +11,7 @@ A smart lock built using ESP8266, an affordable microcontroller with WiFi capabi
 - 🕰️ Real-time status updates
 - 💳 Optional Home Key support with an ESP32 + PN532 reader. You don't need a Raspberry Pi
 - 🔨 Easy installation, compatible with most standard locks
-- 🔓 Optional clutch: the key and thumb-turn turn freely, no fighting against the servo
+- 🌀 The key and thumb-turn turn freely with a single servo: a spiral coupling, no clutch, no fighting against the servo
 
 <br>
 
@@ -40,7 +40,7 @@ The whole idea came from a [hackaday.io](https://hackaday.io/project/11917-smart
 git clone https://github.com/peterrakolcza/SmartLock.git
 ```
 
-2. 3D print the [compact clutch lock](3D%20printed%20case/clutch/README.md), or the original case without the clutch
+2. 3D print the [single-servo lock](3D%20printed%20case/spiral/README.md), or the original case
 3. Order the custom PCB and the components from JLCPCB for example
 4. Wait :(
 5. Configure the parameters in [`code/smart_lock/smart_lock.ino`](code/smart_lock/smart_lock.ino)
@@ -51,14 +51,13 @@ git clone https://github.com/peterrakolcza/SmartLock.git
 #endif
 
 #define HOMEKEY_MODE 1 // 0 = standalone, 1 = HomeKey reader connects directly, 2 = external MQTT broker
-#define USE_CLUTCH 1   // 0 = original direct drive, 1 = with the clutch servo
 ```
 6. Flash the firmware with the Arduino IDE (libraries: *ArduinoJson*, *PubSubClient*) or PlatformIO (`cd code/smart_lock && pio run -t upload`)
 7. Assemble the whole lock
 8. No calibration needed:
      - Put the magnet in the thumb-turn adapter so it is in front of the reed sensor when the thumb-turn is in its home position (where the key can be inserted and removed).
      - Start with the door unlocked. Then lock it once and unlock it once (button, app or HTTP API). On these first two moves the lock keeps turning until the thumb-turn stops at its end stop, counts the turns with the reed sensor and remembers them.
-     - From then on every move stops when the magnet has come round the learned number of times, so the thumb-turn always ends in the home position. Servo speed, supply voltage and the clutch finding its slots no longer matter.
+     - From then on every move stops when the magnet has come round the learned number of times, so the thumb-turn always ends in the home position. Servo speed and supply voltage no longer matter.
      - If the magnet doesn't come round in time (door handle not lifted, bolt blocked), the lock stops, reports **jammed** (Apple Home shows a jam alert, the API returns `"state":"jammed"`) and never claims to be locked.
      - To learn again (another door, moved magnet): hold the side button while powering on. The LED flashes 3 times.
 9. Use it standalone (button + HTTP API), add it to Apple Home with Home Key using the [HomeKey-ESP32 reader](homekey/README.md), or integrate it with Homebridge
@@ -89,7 +88,7 @@ You can just order my custom PCB assembled and flash the firmware. After that, c
 |     D7     |      13     |  Reed sensor   |
 |     D2     |      4      |     Button     |
 |     D1     |      5      |      LED       |
-|     RX     |      3      | Clutch servo signal (optional) |
+|     RX     |      3      | Hub hall sensor (A3144) |
 
 <br>
 <br>
@@ -112,17 +111,15 @@ The lock now detects this: if the thumb-turn stops before the learned number of 
 
 <br>
 
-## 🔓 Compact clutch lock: use the key normally
+## 🌀 Single servo, key turns freely
 
-Without the clutch, turning the key or the thumb-turn by hand means back-driving the servo gearbox. The compact clutch lock adds a small SG90 servo that connects the main servo to the thumb-turn only while the lock is moving. The rest of the time the key turns as if the smart lock wasn't there.
+Without help, turning the key or the thumb-turn by hand means back-driving the servo gearbox. Here a **spiral coupling** sits between the servo and the thumb-turn: a pin runs in a 2.75-turn spiral groove under the servo hub. Inside the spiral the key turns freely, and only at its ends does the servo drive the lock. After every movement the servo backs off into the spiral, counted by a small hall sensor on the RX pin. It uses **one servo, has nothing to calibrate, and the V3 PCB is unchanged**. The case is 82 × 85 mm.
 
-It is a complete new case (82 × 90 mm) around the **unchanged V3 PCB**. All of it is generated and checked in CAD: fit, motion, assembly order and printability.
-
-<img src="images/clutch_operation.gif" width="640" />
+<img src="images/lock_operation.gif" width="760" />
 
 <img src="images/lock_cutaway.png" width="640" />
 
-See [the compact clutch lock guide](3D%20printed%20case/clutch/README.md) for parts, assembly and setup. The original case (`bottom`, `middle`, `cover_led`) is still in `3D printed case` if you don't want the clutch.
+See [the single-servo lock guide](3D%20printed%20case/spiral/README.md) for how it works, the other options I considered, parts, wiring, assembly, and the CAD and firmware checks. The two-servo clutch version is on branch `feature/clutch`. The original case (`bottom`, `middle`, `cover_led`) is still in `3D printed case`.
 
 <br>
 

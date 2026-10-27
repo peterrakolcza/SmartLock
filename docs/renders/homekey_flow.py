@@ -125,10 +125,10 @@ def frames():
         (1.6, "1", "Tap your iPhone or Apple Watch", "Home Key in Wallet, Express mode: no unlocking or Face ID needed"),
         (1.2, "2", "The reader authenticates the Home Key", "HomeKey-ESP32 is the native Apple Home lock accessory"),
         (1.6, "3", "Reader to lock: \"unlocking\"", "MQTT topic smartlock-reader/homekit/state = 4"),
-        (2.4, "4", "The lock closes its clutch and turns the thumb-turn", "It stops when the magnet has come round the learned number of turns"),
+        (2.4, "4", "The servo takes up the free play and turns the thumb-turn", "It stops when the magnet has come round the learned number of turns"),
         (1.6, "5", "Lock to reader: \"unlocked\"", "set_state = 0, only now Apple Home shows Unlocked"),
         (1.4, "5", "Lock to reader: \"unlocked\"", "set_state = 0, only now Apple Home shows Unlocked"),
-        (2.4, "6", "Someone locks it with the key by hand", "The reed sensor counts the turn, the clutch lets the key turn freely"),
+        (2.4, "6", "Someone locks it with the key by hand", "The reed sensor counts the turn, the spiral lets the key turn freely"),
         (1.6, "7", "Lock to reader: \"locked\"", "Apple Home stays in sync with manual changes"),
         (1.2, "7", "Lock to reader: \"locked\"", "Apple Home stays in sync with manual changes"),
     ]
@@ -161,9 +161,9 @@ def frames():
             elif index == 3:
                 phone_x = lerp(READER[0] - 135, PHONE_HOME[0], ease(t))
                 angle = -90 * ease(t)
-                lock_state, app_state = "clutch closed · servo turning", "Unlocking..."
+                lock_state, app_state = "servo turning the thumb-turn", "Unlocking..."
             elif index in (4, 5):
-                angle, lock_state, led = -90, "unlocked · clutch open", True
+                angle, lock_state, led = -90, "unlocked · servo parked", True
                 if index == 4:
                     packet = (ease(t), "to_reader", "set_state = 0  unlocked")
                     app_state = "Unlocking..."

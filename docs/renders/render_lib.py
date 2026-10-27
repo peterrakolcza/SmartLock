@@ -42,13 +42,17 @@ def polydata(part):
 
 
 class Scene:
-    def __init__(self, width=1200, height=800):
+    def __init__(self, width=1200, height=800, translucent=False):
         self.window = vtk.vtkRenderWindow()
         self.window.SetOffScreenRendering(1)
         self.window.SetSize(width, height)
-        self.window.SetMultiSamples(8)
+        self.window.SetMultiSamples(0 if translucent else 8)
         self.renderer = vtk.vtkRenderer()
         self.window.AddRenderer(self.renderer)
+        if translucent:  # correct see-through parts
+            self.window.SetAlphaBitPlanes(1)
+            self.renderer.SetUseDepthPeeling(1)
+            self.renderer.SetMaximumNumberOfPeels(8)
         self.renderer.GradientBackgroundOn()
         self.renderer.SetBackground(0.97, 0.97, 0.98)
         self.renderer.SetBackground2(0.84, 0.86, 0.90)

@@ -12,10 +12,9 @@ int baseVersion = 4;
 #define SENSOR 13
 #define BUTTON 4
 #define RINGLED 5
-#define CLUTCHPIN 3 // RX pin of the programming header, Serial runs TX only
+#define HUBSENSOR 3 // hall switch on the servo hub, RX pin of the programming header (Serial runs TX only)
 
 Servo servo;
-Servo clutch;
 
 int counter = 0;
 
@@ -43,13 +42,8 @@ bool previousStateWasHigh = true;
 #define MQTT_USER "" // optional, must match the reader's MQTT settings
 #define MQTT_PASS ""
 
-// Clutch servo (3D printed case/clutch): the key / thumb-turn turns freely while the lock is idle
-// Set to 0 for the original direct drive build without the clutch
-#define USE_CLUTCH 1 // CHANGE THIS
-#define CLUTCH_OPEN_ANGLE 75     // CALIBRATE: fork lifted, dogs apart
-#define CLUTCH_CLOSED_ANGLE 105  // CALIBRATE: fork pressed down, a few degrees past contact so it keeps pushing
-#define CLUTCH_SETTLE_MS 350     // time for the SG90 to move
-#define CLUTCH_RELIEF_MS 40      // short reverse of the main servo so the dogs are not loaded when releasing
+// Single servo with the spiral coupling (3D printed case/spiral): the key turns freely while the lock is idle,
+// a hall switch on the hub tells the firmware how far the servo has backed off. Nothing to calibrate.
 
 // No manual calibration: the first lock and the first unlock run until the thumb-turn stops and learn the number of
 // turns (counted by the reed sensor). Hold the side button while powering on to forget them and learn again.
@@ -72,13 +66,6 @@ bool jammed = false;
 
 MotionController motion;
 
-void setClutch(bool closed) {
-#if USE_CLUTCH
-  if (!clutch.attached()) clutch.attach(CLUTCHPIN);
-  clutch.write(closed ? CLUTCH_CLOSED_ANGLE : CLUTCH_OPEN_ANGLE);
-#endif
-}
-
 void runServo(int direction) {
   if (direction == 0) {
     servo.detach();
@@ -88,18 +75,16 @@ void runServo(int direction) {
   servo.write(direction > 0 ? 180 : 1);
 }
 
-// The V3 board powers the servos all the time, only the clutch servo's signal is switched off between movements
-void servoPower(bool on) {
-#if USE_CLUTCH
-  if (!on) clutch.detach();
-#endif
-}
+// The V3 board powers the servo all the time
+void servoPower(bool) {}
 
 bool reedActive() { return digitalRead(SENSOR) == LOW; }
 
+bool hubActive() { return digitalRead(HUBSENSOR) == LOW; }
+
 void startMotion(bool toLocked) {
   if (motion.busy() || (locked == toLocked && !jammed)) return;
-  if (motion.start(toLocked, millis(), reedActive()) && motion.learning()) {
+  if (motion.start(toLocked, millis(), reedActive(), hubActive()) && motion.learning()) {
     Serial.println(String("Learning: turning until the thumb-turn stops (") + (toLocked ? "lock" : "unlock") + ")");
   }
 }
@@ -112,7 +97,7 @@ bool motionInProgress() { return motion.busy(); }
 
 void handleLockUnlock() {
   if (!motion.busy()) return;
-  MotionResult result = motion.update(millis(), reedActive());
+  MotionResult result = motion.update(millis(), reedActive(), hubActive());
 
   if (result == MOTION_DONE) {
     locked = motion.targetLocked();
@@ -370,11 +355,8 @@ void setup() {
   pinMode(SENSOR, INPUT_PULLUP);
   pinMode(BUTTON, INPUT_PULLUP);
   pinMode(RINGLED, OUTPUT);
-#if USE_CLUTCH
-  Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY); // RX is the clutch servo signal
-#else
-  Serial.begin(9600);
-#endif
+  Serial.begin(9600, SERIAL_8N1, SERIAL_TX_ONLY); // RX is the hub sensor
+  pinMode(HUBSENSOR, INPUT_PULLUP);
 
   initWifi();
 
@@ -389,8 +371,8 @@ void setup() {
     Serial.println("MDNS responder started");
   }
 
-  MotionHardware hardware = {runServo, setClutch, servoPower};
-  motion.begin(hardware, USE_CLUTCH, CLUTCH_SETTLE_MS, CLUTCH_RELIEF_MS);
+  MotionHardware hardware = {runServo, servoPower};
+  motion.begin(hardware);
 
   EEPROM.begin(sizeof(settings));
   EEPROM.get(0, settings); //read data from array in ram and cast it into struct called settings

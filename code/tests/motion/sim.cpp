@@ -1,5 +1,9 @@
-// Simulated door lock for motion.h: thumb-turn with end stops, the dog clutch (teeth only drop in within +-4 deg of a
-// slot), the reed magnet at the thumb-turn's home position, manual key turns and jams.
+// Simulated door lock for motion.h (single servo + spiral coupling).
+//
+// Hub angle h (servo), thumb-turn angle k. The spiral lets q = h - k move freely between QMIN and QMAX
+// (SPIRAL_TURNS * 360 deg); at the ends the hub drives the thumb-turn. The thumb-turn has end stops just past home
+// after N turns. Knob reed: magnet at the thumb-turn's home. Hub hall: one magnet, placed (in the CAD) so that it
+// passes the sensor 135 deg after reversing from either spiral end.
 //   c++ -std=c++17 -Wall -o sim sim.cpp && ./sim
 
 #include <cmath>
@@ -8,139 +12,141 @@
 
 #include "../../smart_lock/motion.h"
 
+static const double S = MOTION_SPIRAL_TURNS * 360.0;
+static const double QMAX = 400.0;              // arbitrary origin
+static const double QMIN = QMAX - S;
+
 struct Lock {
-  double thumb = 0;        // thumb-turn angle, 0 = home (key removable), +360 per locking turn
-  double hub = 0;          // servo hub angle
-  int servoDir = 0;
-  bool clutchClosed = false;
-  bool engaged = false;
+  double k = 0, h = QMAX - 135;
+  int dir = 0;
   bool powered = false;
-  double lowStop = -12;    // end stops just past home, as on a euro cylinder
-  double highStop = 732;   // 2 turns to lock
-  double speed = 360;      // deg/s under the motor (60 rpm)
-  double alignedFor = 0;
-  double play = 0;         // position of the teeth inside the slots, +-4 deg of backlash
+  int turns = 2;
+  double blockAt = 1e9;                        // a jam: the bolt can't get past this thumb-turn angle
 } lock;
 
-static void hwServo(int d) { lock.servoDir = d; }
-static void hwClutch(bool c) { lock.clutchClosed = c; if (!c) lock.engaged = false; }
+static void hwServo(int d) { lock.dir = d; }
 static void hwPower(bool on) { lock.powered = on; }
 
-static bool reedActive() {
-  double a = std::fmod(std::fmod(lock.thumb, 360) + 360, 360);
-  return a < 12 || a > 348;
-}
-
-static bool aligned() {
-  double d = std::fmod(std::fmod(lock.hub - lock.thumb, 60) + 60, 60);
-  return d <= 4 || d >= 56;
-}
+static double wrap(double a) { return std::remainder(a, 360.0); }
+static bool knobActive() { return std::fabs(wrap(lock.k)) < 12; }
+static bool hubActive() { return std::fabs(wrap(lock.h - (QMAX - 135))) < 8; }
 
 static void step(double dt) {
-  if (lock.clutchClosed && !lock.engaged) {
-    lock.alignedFor = aligned() ? lock.alignedFor + dt : 0;
-    if (lock.alignedFor >= 0.01) {  // SG90 pushes the teeth in
-      lock.engaged = true;
-      lock.play = std::remainder(lock.hub - lock.thumb, 60.0);
-    }
+  if (!lock.powered || lock.dir == 0) return;
+  double q = lock.h - lock.k;
+  bool pushing = (lock.dir > 0 && q >= QMAX - 1e-9) || (lock.dir < 0 && q <= QMIN + 1e-9);
+  double speed = pushing ? 300 : 400;          // slower under load
+  double move = lock.dir * speed * dt;
+  if (!pushing) {
+    double nq = q + move;
+    if (nq > QMAX) { move = QMAX - q; }
+    if (nq < QMIN) { move = QMIN - q; }
+    lock.h += move;
+    return;
   }
-  if (!lock.powered || lock.servoDir == 0) return;
-  double move = lock.servoDir * lock.speed * dt;
-  if (lock.engaged) {
-    // The hub turns freely inside the backlash, beyond it the thumb-turn has to follow
-    double play = lock.play + move;
-    double push = 0;
-    if (play > 4) push = play - 4, play = 4;
-    if (play < -4) push = play + 4, play = -4;
-    double next = lock.thumb + push;
-    if (next > lock.highStop || next < lock.lowStop) return;  // stalled against the end stop
-    lock.thumb = next;
-    lock.play = play;
-  }
-  lock.hub += move;
+  double nk = lock.k + move;
+  if (nk > lock.turns * 360 + 12 || nk < -12 || (lock.dir > 0 && nk > lock.blockAt)) return;  // stalled
+  lock.k = nk;
+  lock.h += move;
 }
 
 static int failures = 0;
 static void expect(bool ok, const char* what) {
-  printf("  %s %s\n", ok ? "ok  " : "FAIL", what);
+  if (!ok || getenv("VERBOSE")) printf("  %s %s\n", ok ? "ok  " : "FAIL", what);
   if (!ok) failures++;
 }
 
 static MotionController motion;
 static unsigned long now = 0;
 
-// Runs one movement to the end, returns the final result
 static MotionResult run(bool toLocked) {
-  motion.start(toLocked, now, reedActive());
-  MotionResult result = MOTION_BUSY, last = MOTION_BUSY;
-  while ((result = motion.update(now, reedActive())) != MOTION_IDLE) {
-    if (result == MOTION_DONE || result == MOTION_JAMMED) last = result;
+  motion.start(toLocked, now, knobActive(), hubActive());
+  MotionResult r, last = MOTION_BUSY;
+  while ((r = motion.update(now, knobActive(), hubActive())) != MOTION_IDLE) {
+    if (r == MOTION_DONE || r == MOTION_JAMMED) last = r;
     step(0.001);
     now++;
-    if (now > 120000000UL) break;
+    if (now > 4000000000UL) break;
   }
   return last;
 }
 
+// Turning the key by hand: fails if the pin reaches the end of the spiral (the key would fight the servo)
+static bool manual(double degrees) {
+  double q = lock.h - (lock.k + degrees);
+  if (q > QMAX || q < QMIN) return false;
+  lock.k += degrees;
+  return true;
+}
+
+static bool atHome(int turns) { return std::fabs(lock.k - turns * 360) < 15; }
+
 int main() {
-  MotionHardware hw = {hwServo, hwClutch, hwPower};
-  motion.begin(hw, true, 350, 40);
+  MotionHardware hw = {hwServo, hwPower};
+  motion.begin(hw);
 
-  printf("first lock, nothing learned yet (2 turn lock, clutch 51 deg off)\n");
-  lock.hub = 51;
-  MotionResult r = run(true);
-  expect(r == MOTION_DONE, "finishes without a jam");
+  printf("first lock and unlock learn the turns (2 turn lock)\n");
+  expect(run(true) == MOTION_DONE, "learning lock done");
   expect(motion.learned.turnsToLock == 2, "learned 2 turns to lock");
-  expect(motion.learned.revolutionMs > 900 && motion.learned.revolutionMs < 1300, "learned ~1 s per revolution");
-  expect(lock.thumb > 700, "bolt fully thrown");
+  expect(lock.k > 700, "bolt fully thrown");
+  expect(manual(-720) && manual(720), "the key can unlock and lock by hand after parking");
+  expect(run(false) == MOTION_DONE && motion.learned.turnsToUnlock == 2, "learning unlock, 2 turns");
+  expect(atHome(0), "back home");
+  printf("  learned %u ms per hub turn\n", motion.learned.revolutionMs);
 
-  printf("first unlock, learns the other direction\n");
-  r = run(false);
-  expect(r == MOTION_DONE && motion.learned.turnsToUnlock == 2, "learned 2 turns to unlock");
-  expect(lock.thumb < 20, "back home");
+  printf("normal moves stop at home and park with room for the key\n");
+  expect(run(true) == MOTION_DONE && atHome(2), "lock stops at home after 2 turns");
+  expect(manual(-720), "key unlocks by hand");
+  expect(manual(720), "key locks again by hand");
+  expect(run(false) == MOTION_DONE && atHome(0), "unlock");
 
-  printf("normal lock after learning, clutch 51 deg off (key used before)\n");
-  lock.hub = lock.thumb + 51;
-  r = run(true);
-  expect(r == MOTION_DONE, "done");
-  expect(std::fabs(lock.thumb - 720) < 15, "stops at the magnet after 2 turns, not against the end stop");
-
-  printf("unlock, then someone turned the key 100 deg and left it there\n");
-  run(false);
-  lock.thumb += 100;
-  lock.hub = 13;
-  r = run(true);
-  expect(r == MOTION_DONE && std::fabs(lock.thumb - 720) < 15, "completes the turn and stops at home");
-
-  printf("every clutch offset 0-59 deg after a key turn\n");
-  bool all = true;
-  double worst = 0;
-  for (int offset = 0; offset < 60; offset++) {
-    run(false);
-    lock.hub = lock.thumb + offset;
-    bool ok = run(true) == MOTION_DONE && std::fabs(lock.thumb - 720) < 15;
-    worst = std::fmax(worst, std::fabs(lock.thumb - 720));
-    all = all && ok;
+  printf("random use: 300 operations, motor and key mixed\n");
+  srand(1);
+  bool locked = false, ok = true, keyOk = true;
+  for (int i = 0; i < 300; i++) {
+    if (rand() % 2) {
+      MotionResult r = run(!locked);
+      locked = !locked;
+      ok = ok && r == MOTION_DONE && atHome(locked ? 2 : 0);
+    } else {
+      keyOk = keyOk && manual(locked ? -720 : 720);
+      locked = !locked;
+    }
   }
-  printf("    worst end position error %.1f deg\n", worst);
-  expect(all, "locks fully and stops at home for every offset");
+  expect(ok, "every motor move completed at home");
+  expect(keyOk, "the key never had to fight the servo");
 
-  printf("jam: handle not lifted, the bolt blocks after 200 deg\n");
-  run(false);
-  lock.highStop = 200;
-  r = run(true);
-  expect(r == MOTION_JAMMED, "reports a jam");
-  expect(lock.thumb <= 200, "stopped at the obstruction");
-  lock.highStop = 732;
-  run(false);
+  printf("jam: the bolt blocks after 200 deg\n");
+  if (locked) { run(false); locked = false; }
+  lock.blockAt = 200;
+  expect(run(true) == MOTION_JAMMED, "reported as jammed");
+  expect(manual(-200), "after the jam the servo parked, the key turns freely");
+  lock.blockAt = 1e9;
 
-  printf("learning on a cylinder without an end stop gives up\n");
+  printf("one-turn lock\n");
   motion.forget();
-  lock.highStop = 1e9;
-  lock.thumb = 0;
-  r = run(true);
-  expect(r == MOTION_JAMMED, "reports a problem instead of turning forever");
-  expect(motion.learned.turnsToLock == 0, "nothing learned");
+  lock.turns = 1;
+  lock.k = 0;
+  lock.h = QMAX - 135;
+  expect(run(true) == MOTION_DONE && motion.learned.turnsToLock == 1, "learned 1 turn");
+  expect(run(false) == MOTION_DONE && motion.learned.turnsToUnlock == 1 && atHome(0), "and back");
+  bool oneOk = true;
+  for (int i = 0; i < 50; i++) {
+    oneOk = oneOk && run(true) == MOTION_DONE && manual(-360) && manual(360) && run(false) == MOTION_DONE && manual(360) && manual(-360);
+  }
+  expect(oneOk, "50 cycles with the key used in between");
+
+  printf("fresh install: the pin can sit anywhere in the spiral\n");
+  bool installOk = true;
+  for (double q = QMIN; q <= QMAX; q += 45) {
+    motion.forget();
+    lock.turns = 2;
+    lock.k = 0;
+    lock.h = q;
+    installOk = installOk && run(true) == MOTION_DONE && atHome(2) && manual(-720) && manual(720)
+                && run(false) == MOTION_DONE && atHome(0) && manual(720) && manual(-720);
+  }
+  expect(installOk, "learns and works from every starting position");
 
   printf("%s\n", failures ? "FAILED" : "ALL OK");
   return failures ? 1 : 0;
