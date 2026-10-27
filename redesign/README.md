@@ -6,7 +6,7 @@ A clean-sheet lock, designed end to end: mechanics, PCB and firmware. It sticks 
 | :-- | :-- |
 | Mechanics (parametric CAD, STLs, checks, renders) | [`3D printed case/v5`](../3D%20printed%20case/v5) |
 | PCB (generated in KiCad 9, routed, DRC, Gerbers, BOM, pick and place) | [`PCB/v5`](../PCB/v5) |
-| Firmware (ESP32-C6, Arduino + esp-matter) | [`code/v5`](../code/v5) |
+| Firmware (ESP32-C6, ESP-IDF 5.5 + esp-matter 1.6) | [`code/v5`](../code/v5) |
 | Motion logic, shared with the V3 firmware and its simulation | [`code/smart_lock/motion.h`](../code/smart_lock/motion.h), [`code/tests/motion`](../code/tests/motion) |
 
 ![v5, cut open](../images/v5_cutaway.png)
@@ -68,24 +68,29 @@ python3 erc.py && python3 make_board.py place && python3 make_board.py route && 
 | | per day |
 | :-- | :-- |
 | 6 movements × ~35 s (drive + park) × ~0.3 A | ~18 mAh |
-| ESP32-C6 as a Thread sleepy end device, 5 s poll, light sleep (~0.3 mA average) | ~7 mAh |
+| ESP32-C6 as a Thread sleepy end device, 2 s poll, light sleep (~0.3 mA average) | ~7 mAh |
 | Halls, LDO, charger, battery divider | < 0.2 mAh |
 | **Total** | **~25 mAh** |
 
 With ~1000 mAh usable that is **about 6 weeks** at 6 movements a day, and about 4 weeks at 10. Each movement costs as much as about a third of a day idle, so the number of movements decides most of it. Charging is through USB-C on the side of the case.
 
-> **Not there yet in firmware.** The idle figure needs the ESP32-C6 to be a Thread *sleepy* end device with light sleep. The firmware here is built on the stock Arduino Matter libraries, which are compiled as a Thread router (FTD) with the radio always on (~25 mA): **on the pouch that lasts under two days**, so for now it's a bench / USB build. pioarduino's `custom_sdkconfig` can rebuild the libraries as MTD + ICD + light sleep, but its rebuild drops the esp-matter component, so the app doesn't compile (tried). The way there is to build the same app with ESP-IDF + esp-matter directly, using their ICD door-lock settings. The light-sleep code (wake on the button and the thumb-turn hall, Matter commands wake the loop) is already in `main.cpp` behind `CONFIG_PM_ENABLE`.
+The firmware is built for this: the ESP32-C6 is a Thread **sleepy end device** (Matter ICD) and sleeps between polls. The idle current itself is an estimate until it is measured on a board. The 2 s poll interval is the main knob. A lock command waits at most that long in the Thread router. A longer interval saves battery, and a shorter one makes the lock answer faster.
 
 ## Firmware
 
-* Matter **door lock** endpoint (deadbolt) plus a **power source** cluster with the battery level, built on Arduino-ESP32 3.x (pioarduino) with esp-matter.
-* Lock / unlock commands from any Matter controller, state reports for key turns by hand (source "manual"), a **LockJammed** alarm when the hub stalls before the end.
-* Button: short press locks or unlocks; hold 6 s to forget the learned turns; hold 12 s to leave the Matter fabric. The pairing code is printed on the serial port.
-* `motion.h` is the same controller as V3: drive until the thumb-turn arrives, park the pin back in the spiral, learn the turns, detect jams. `MOTION_DEFAULT_REV_MS` is now overridable, because the worm turns the hub in ~5 s instead of 1.2 s.
-* Light sleep (compiled only with `CONFIG_PM_ENABLE`, see the battery section): level interrupts on the button and the thumb-turn hall wake the CPU, and Matter commands wake the loop directly.
+[`code/v5`](../code/v5) is an ESP-IDF 5.5 project with esp-matter 1.6 from the Espressif component registry:
+
+* Matter **door lock** endpoint (deadbolt) with a **power source** cluster for the battery level.
+* Lock / unlock commands from any Matter controller. Key turns by hand are reported (source "manual"). A **LockJammed** alarm is sent when the hub stalls before the end.
+* **Low power.** Thread runs as a minimal end device (MTD) with the Matter ICD server: 2 s slow poll, 0.5 s fast poll after activity. Automatic light sleep and tickless FreeRTOS run between polls, and the 802.15.4 radio and BLE sleep too. BLE is only used for commissioning, and there's no Wi-Fi. The main task blocks until the button or the thumb-turn hall changes level (GPIO wake), a Matter command arrives, or the 10-minute battery report is due. While the motor runs, a PM lock keeps the CPU awake.
+* Button: short press locks or unlocks; hold 6 s to forget the learned turns; hold 12 s to factory reset (leaves the Matter fabric). The pairing QR code and manual code are printed on the serial port at boot.
+* `motion.h` is the same controller as V3: drive until the thumb-turn arrives, park the pin back in the spiral, learn the turns, detect jams. `MOTION_DEFAULT_REV_MS` is now overridable, because the worm turns the hub in ~5 s instead of 1.2 s (v5 sets 6000 ms).
+* Two OTA slots of 1.875 MB on the 4 MB module (the image is 1.55 MB), so Matter OTA updates work.
+* It uses esp-matter's **test** attestation (test vendor ID). Home apps pair it with an "uncertified accessory" warning. That's normal for a DIY Matter device.
 
 ```bash
-cd code/v5 && pio run -t upload      # ESP32-C6-MINI-1-N4 (4 MB), pairing code on the serial port
+cd code/v5
+idf.py set-target esp32c6 && idf.py build flash monitor   # ESP-IDF 5.5, e.g. in the espressif/idf:v5.5.3 container
 ```
 
 ## What was checked, and how
@@ -104,7 +109,7 @@ cd code/v5 && pio run -t upload      # ESP32-C6-MINI-1-N4 (4 MB), pairing code o
 | Schematic rules: every net connected, decoupling, strapping pins, ADC pins, USB CC resistors, DRV8833 paralleling | `PCB/v5/erc.py` | OK |
 | PCB: KiCad DRC (clearance 0.15 mm, edge 0.3 mm, antenna keep-out), unconnected items | `kicad-cli pcb drc` | **0 errors, 0 unconnected.** Accepted and listed by `finish.py`: 5 items inside the USB-C footprint itself (its locating holes are 0.19 mm from its own pads; its shell reaches the edge on purpose) |
 | Motion logic: learning, parking, 300 random motor / key operations, jams, fresh install | `code/tests/motion/run.sh` | ALL OK |
-| Firmware builds | PlatformIO (pioarduino, Arduino-ESP32 3.3) | builds: RAM 42 %, flash 76 % of the 3 MB app partition. Sleepy build: does not compile (see battery) |
+| Firmware builds with the low-power settings applied (MTD, ICD, PM, tickless idle, 802.15.4 sleep, checked in the resolved `sdkconfig`) | ESP-IDF 5.5.3 + esp-matter 1.6.1 | builds: 1.55 MB image (19 % of the OTA slot free), static RAM 45 % |
 
 All 40 mechanical checks pass with `python lock.py` in `3D printed case/v5` (it exports the STLs, then runs the checks). The PCB rebuilds from scratch with `make_board.py place / route / finish` in a KiCad 9 container.
 
@@ -115,7 +120,7 @@ All 40 mechanical checks pass with `python lock.py` in `3D printed case/v5` (it 
 | Torque of your cylinder | The most important unknown. Measure it with a lever and a luggage scale. Stiff doors need the current limit raised (R on ISENSE); easy ones can use a 30:1 motor and move ~1.7× faster. |
 | Speed | Estimated ~20 s until the door is locked, ~35 s including parking. That is the price of a small motor through a self-locking worm. |
 | Battery life | Estimated above. Light sleep with Thread polling must be measured. |
-| Low-power firmware | Needs the ESP-IDF + esp-matter build described in the battery section. |
+| Firmware on hardware | Builds, but has not run on a board yet: light-sleep current, GPIO wake, Thread polling and pairing with a home hub need to be tried and measured. |
 | Tape on your door | VHB needs a clean, smooth, non-porous surface. Painted wood and textured plastic are less reliable. |
 | PCB | Generated and routed by script; DRC-clean is not the same as reviewed. Check the footprints of J1, J2 and SW1 against the parts you buy. |
 | Matter | DIY devices aren't certified. They pair with a warning but work. Thread needs a border router at home (HomePod mini, Apple TV, Nest Hub, …). |
