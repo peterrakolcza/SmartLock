@@ -34,3 +34,6 @@
 # graphify knowledge graph (local cache)
 graphify-out/
 __pycache__/
+
+# Claude Code local settings
+.claude/
