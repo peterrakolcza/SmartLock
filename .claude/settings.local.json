@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add *)",
+      "Bash(git commit -q -m 'v5: fix the jaw screws, M2 deck screws, AliExpress part list, tidy up *)"
+    ]
+  }
+}

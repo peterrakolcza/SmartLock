@@ -110,8 +110,11 @@ def universal():
                 cases += 1
                 turn = k.thumb_turn(L, length, thick, top)
                 jw = k.jaws(L, gap=thick)
+                screws = k.jaw_screws(L, gap=thick)
                 if overlap(turn, adapter) > LIMIT:
                     problems.append(f"{length:.0f}x{thick:.0f} top {top:.0f}: wing hits the adapter")
+                if overlap(screws, adapter + jw + turn) > LIMIT:
+                    problems.append(f"gap {thick:.0f}: jaw screws hit the cage, jaws or wing")
                 if overlap(jw, adapter) > LIMIT:
                     problems.append(f"gap {thick:.0f}: jaws outside the cage")
                 grip = (L.base_top + top) - z_bottom
@@ -119,7 +122,7 @@ def universal():
                     problems.append(f"top {top:.0f}: only {grip:.1f} mm of grip")
                 for kk in range(0, 360, 30):           # it also has to turn inside the base and the case
                     for sn, sp in (("base", k.base(L, k.DOORS["rosette"])), ("case", k.case(L))):
-                        if overlap(k.jaws(L, kk, thick) + k.adapter(L, kk), sp) > LIMIT:
+                        if overlap(k.jaws(L, kk, thick) + k.jaw_screws(L, kk, thick) + k.adapter(L, kk), sp) > LIMIT:
                             problems.append(f"gap {thick:.0f} @{kk}: hits {sn}")
                             break
     report(f"{cases} wing sizes: {k.WING_LONG_MAX:.0f} mm long max, {k.WING_THICK[0]:.0f}-{k.WING_THICK[1]:.0f} mm thick, "

@@ -52,6 +52,10 @@ DOORS = {
 WING_TOP = (12.0, 22.0)      # top of the thumb-turn wing
 WING_THICK = (4.0, 22.0)     # jaw gap range
 WING_LONG_MAX = 46.0
+JAW_SCREW_Z = 7.0            # jaw screw axis above the bottom of the cage
+JAW_SCREW_LEN = 16.0         # M3 x 16 reaches the jaws for every wing thickness
+JAW_INSERT_D = 4.0           # hole for an M3 x 3 x 4.2 heat-set insert
+JAW_DIMPLE = 0.8
 
 # ---------------------------------------------------------------------------------------------------- spiral
 SPIRAL_TURNS = 2.75          # = MOTION_SPIRAL_TURNS in the firmware
@@ -312,8 +316,8 @@ def adapter(L, k=0.0):
     # Cage: two walls along x (the wing's length), jaws slide in y
     z_bottom = A - 4.0 - (WING_TOP[1] - WING_TOP[0]) - 8.0 - 2.0
     walls = cube(-24.0, 24.0, 14.0, 17.0, z_bottom, A - 3.99) + cube(-24.0, 24.0, -17.0, -14.0, z_bottom, A - 3.99)
-    for sx in (-12.0, 12.0):                                                   # jaw screws through the walls (M3)
-        walls -= cyl_y(1.7, -18, 18, sx, z_bottom + 7.0)
+    for sx in (-12.0, 12.0):                                                   # M3 x 3 heat-set inserts: the screws push the jaws
+        walls -= cyl_y(JAW_INSERT_D / 2, -18, 18, sx, z_bottom + JAW_SCREW_Z)
     part = disc + walls
     return part.rotate((0, 0, k))
 
@@ -325,14 +329,30 @@ def jaws(L, k=0.0, gap=11.0):
     for side in (-1, 1):
         y0, y1 = sorted((side * gap / 2, side * (gap / 2 + 3.0)))
         jaw = cube(-22.0, 22.0, y0, y1, z_bottom, A - 4.3)
-        for sx in (-12.0, 12.0):
-            jaw -= cyl_y(1.25, y0 - 1, y1 + 1, sx, z_bottom + 7.0)             # M3 thread (self-tapping)
+        outer = y0 if side < 0 else y1
+        for sx in (-12.0, 12.0):                                               # dimple that keeps the screw tip in place
+            jaw -= cyl_y(1.7, *sorted((outer - side * JAW_DIMPLE, outer + side)), sx, z_bottom + JAW_SCREW_Z)
         # grip ridges on the wing side (0.3 mm, they bite into the wing)
         face = y1 if side < 0 else y0
         for i in range(8):
             z = z_bottom + 2.0 + i * 2.2
             jaw += cube(-21.0, 21.0, face - 0.3 if side > 0 else face, face if side > 0 else face + 0.3, z, z + 0.6)
         out += jaw
+    return out.rotate((0, 0, k))
+
+
+def jaw_screws(L, k=0.0, gap=11.0):
+    """M3 x JAW_SCREW_LEN socket screws through the wall inserts, tips in the jaw dimples."""
+    z = L.A - 4.0 - (WING_TOP[1] - WING_TOP[0]) - 8.0 - 2.0 + JAW_SCREW_Z
+    out = Manifold()
+    for side in (-1, 1):
+        tip = side * (gap / 2 + 3.0 - JAW_DIMPLE)
+        head = tip + side * JAW_SCREW_LEN
+        for sx in (-12.0, 12.0):
+            a, b = sorted((tip, head))
+            out += cyl_y(1.45, a, b, sx, z, 16)
+            ha, hb = sorted((head, head + side * 3.0))
+            out += cyl_y(2.75, ha, hb, sx, z, 24)
     return out.rotate((0, 0, k))
 
 
@@ -378,7 +398,7 @@ def deck(L):
     for x, y in board.CLAMPS:                                                  # posts that hold the PCB down
         part += cyl(1.6, L.drive0 + board.THICKNESS + 0.05, z0 + 0.01, 16, x, y)
     for a in CASE_BOSSES:
-        part -= cyl(1.25, z0 - 1, z1 + 1, 16, *polar(BORE_R - 2.0, a))
+        part -= cyl(1.25, z0 - 1, z1 + 1, 16, *polar(BORE_R - 2.0, a))       # clearance for M2 x 5 screws into the case
     part -= cyl(1.7, z0 - 1, z1 + 1, 16, *board.FIXED["D1"][:2])               # light pipe
     part -= cube(-33.0, -24.0, -12.0, -6.0, z0 - 1, z1 + 1)                    # motor + battery leads
     return largest(part)
@@ -401,7 +421,7 @@ def case(L):
     # Deck bosses
     for a in CASE_BOSSES:
         x, y = polar(BORE_R - 2.0, a)
-        boss = (cyl(3.2, L.deck0 - 4.0, L.deck0, 32, x, y) ^ cyl(BORE_R + 0.5, 0, 200)) - cyl(1.25, L.deck0 - 5, L.deck0 + 1, 16, x, y)
+        boss = (cyl(3.2, L.deck0 - 4.0, L.deck0, 32, x, y) ^ cyl(BORE_R + 0.5, 0, 200)) - cyl(0.8, L.deck0 - 5, L.deck0 + 1, 16, x, y)   # M2 self-tapping
         cone = Manifold.cylinder(3.2, 0.01, 3.2, circular_segments=32).translate((x, y, L.deck0 - 7.2)) ^ cyl(BORE_R + 0.5, 0, 200)
         part += boss + cone
     # USB-C opening and the flexure side button (both at the PCB)
@@ -466,6 +486,7 @@ def assembly(door_name="rosette", h=FREE_PLAY / 2, k=0.0, wing=(40.0, 11.0, 17.0
         "case": (case(L), "case"),
         "adapter": (adapter(L, k), "adapter"),
         "jaws": (jaws(L, k, gap=wing[1]), (0.5, 0.52, 0.56)),
+        "jaw_screws": (jaw_screws(L, k, gap=wing[1]), "metal"),
         "follower": (follower(L, h, k), "slider"),
         "pin": (pin_model(L, h, k), "metal"),
         "hub": (hub(L, h), "hub"),
