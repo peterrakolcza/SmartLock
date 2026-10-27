@@ -22,6 +22,9 @@ PALETTE = {
 
 
 def polydata(part):
+    # Long thin triangles (a cylinder wall next to a detailed cut-out) make smooth shading streak: split them first
+    if hasattr(part, "refine_to_length"):
+        part = part.refine_to_length(2.0)
     mesh = part.to_mesh()
     verts = np.ascontiguousarray(np.asarray(mesh.vert_properties)[:, :3], dtype=np.float64)
     tris = np.asarray(mesh.tri_verts, dtype=np.int64)

@@ -24,6 +24,7 @@ ALLOWED = {frozenset(p) for p in [
     ("dowels", "wheel"),
 ]}
 results = {}
+TAG = ""          # " [usb]" while the USB version is being checked
 
 
 def overlap(a, b):
@@ -35,6 +36,7 @@ def section(title):
 
 
 def report(label, ok, detail=""):
+    label += TAG
     results[label] = ok
     print(f"  {'OK  ' if ok else 'FAIL'} {label}{(': ' + detail) if detail else ''}")
 
@@ -166,8 +168,8 @@ def assembly():
         locked = overlap(inside.translate((0, 0, 1.5)), base) > LIMIT
         if not locked:
             problems.append("lugs don't hold the case")
-        # 3. pouch and cap from the top
-        top_parts = k.pouch_model(L) + k.cap(L) + k.light_pipe(L)
+        # 3. pouch (battery version) and cap from the top
+        top_parts = k.cap(L) + k.light_pipe(L) + (k.pouch_model(L) if L.power == "battery" else k.Manifold())
         for t in np.arange(3.0, 40, 1.0):
             if overlap(top_parts.translate((0, 0, t)), inside) > LIMIT:
                 problems.append(f"cap/pouch at {t:.0f} mm")
@@ -253,12 +255,14 @@ def adhesive():
 
 
 # ---------------------------------------------------------------------------------------------------- print
-def printability():
+def printability(only=None):
     section("Printing in the export orientation: sloped overhangs (45-85 deg) must be ~0; flat ceilings are bridges")
     for door_name in ("rosette", "escutcheon"):
         L = k.layout(k.DOORS[door_name])
         items = list(k.PER_DOOR.items()) if door_name != "rosette" else list(k.PRINT.items()) + list(k.PER_DOOR.items())
         for name, (make, rot) in items:
+            if only and name not in only:
+                continue
             part = make(L, k.DOORS[door_name]).rotate(rot)
             part = part.translate((0, 0, -part.bounding_box()[2]))
             m = k.to_trimesh(part)
@@ -294,13 +298,16 @@ def strength():
 
 def size():
     section("Size")
-    for name, door in k.DOORS.items():
-        L = k.layout(door)
-        print(f"  {name:10s} {2 * k.CASE_R:.1f} mm x {L.top:.1f} mm from the door")
+    for power in k.POWERS:
+        for name, door in k.DOORS.items():
+            L = k.layout(door, power)
+            print(f"  {power:8s} {name:10s} {2 * k.CASE_R:.1f} mm x {L.top:.1f} mm from the door")
     print("  (single servo + spiral: 82 x 85 mm + the door's escutcheon; original: 87 x 73 mm + escutcheon)")
 
 
 def run():
+    global TAG
+    k.POWER, TAG = "battery", ""
     fit()
     spiral()
     motion()
@@ -310,6 +317,14 @@ def run():
     adhesive()
     printability()
     strength()
+    # USB version: only the case, the light pipe and the height change, so these are the checks that can differ
+    print("\n==== USB version (no pouch) ====")
+    k.POWER, TAG = "usb", " [usb]"
+    fit()
+    motion()
+    assembly()
+    printability(only=k.PER_POWER)
+    k.POWER, TAG = "battery", ""
     size()
     failed = [n for n, ok in results.items() if not ok]
     print(f"\n{len(results) - len(failed)}/{len(results)} checks passed" + (f", failed: {failed}" if failed else ""))

@@ -83,6 +83,14 @@ PARTS = {
     # Hall sensors (bottom side, next to the sensor)
     "C13": (C0402, "100nF", "CL05B104KO5NNNC", {"1": "3V3", "2": "GND"}, "U5"),
     "C14": (C0402, "100nF", "CL05B104KO5NNNC", {"1": "3V3", "2": "GND"}, "U6"),
+    # USB-powered version: USB 5 V straight onto the VBAT rail (the motor driver and the LDO are fine with 5 V)
+    "R13": (R0805, "0R", "0805W8F0000T5E", {"1": "VBUS", "2": "VBAT"}, "U3"),
+}
+
+# Parts left off (DNP) in each version. Never fit R13 together with a battery: it would put 5 V on the cell.
+DNP = {
+    "battery": {"R13"},
+    "usb": {"U3", "R7", "J2"},          # no charger, no battery connector
 }
 
 POWER_NETS = {"VBUS", "VBAT", "3V3", "GND", "MOT_A", "MOT_B", "ISENSE"}

@@ -68,14 +68,17 @@ def fab(pcb):
     run("gerbers", "--layers", "F.Cu,B.Cu,F.Paste,B.Paste,F.SilkS,B.SilkS,F.Mask,B.Mask,Edge.Cuts", "-o", str(FAB) + "/", str(pcb))
     run("drill", "-o", str(FAB) + "/", str(pcb))
     run("pos", "--format", "csv", "--units", "mm", "--side", "both", "-o", str(FAB / "pick_and_place.csv"), str(pcb))
-    with open(FAB / "bom.csv", "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["Designator", "Value", "Footprint", "Manufacturer part"])
-        groups = {}
-        for ref, (fp, value, mpn, _, _) in netlist.PARTS.items():
-            groups.setdefault((value, fp, mpn), []).append(ref)
-        for (value, fp, mpn), refs in sorted(groups.items(), key=lambda g: g[1][0]):
-            w.writerow([",".join(refs), value, fp.split(":")[1], mpn])
+    (FAB / "bom.csv").unlink(missing_ok=True)
+    for version, dnp in netlist.DNP.items():               # one board, two BOMs (the assembler only places BOM parts)
+        with open(FAB / f"bom_{version}.csv", "w", newline="") as f:
+            w = csv.writer(f)
+            w.writerow(["Designator", "Value", "Footprint", "Manufacturer part"])
+            groups = {}
+            for ref, (fp, value, mpn, _, _) in netlist.PARTS.items():
+                if ref not in dnp:
+                    groups.setdefault((value, fp, mpn), []).append(ref)
+            for (value, fp, mpn), refs in sorted(groups.items(), key=lambda g: g[1][0]):
+                w.writerow([",".join(refs), value, fp.split(":")[1], mpn])
     for side in ("top", "bottom"):
         subprocess.run(["kicad-cli", "pcb", "render", "--side", side, "--width", "1600", "--height", "900", "--quality", "basic",
                         "-o", str(HERE / f"render_{side}.png"), str(pcb)], capture_output=True)

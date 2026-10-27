@@ -120,7 +120,31 @@ def size():
     caption(img, "Size (rosette door, 9 mm)", "v5 is the smallest and carries its own battery").save(IMAGES / "v5_size.png")
 
 
+def versions():
+    """Both versions closed, on a door with a rosette: what you see on the door."""
+    scene = Scene(1600, 900)
+    scene.clear()
+    scene.add(Manifold.cube((420, 240, 3)).translate((-210, -120, -3)), (0.55, 0.42, 0.3), specular=0.05)
+    door_ = k.DOORS["rosette"]
+    for x, power in ((-58, "battery"), (58, "usb")):
+        L = k.layout(door_, power)
+        place = lambda m: m.rotate((0, 0, -35)).translate((x, 0, 0))  # noqa: E731
+        scene.add(place(k.case(L)), (0.92, 0.92, 0.9), specular=0.35)                  # white / light grey PETG
+        scene.add(place(k.base(L, door_) + k.cap(L)), (0.2, 0.21, 0.23), specular=0.45)  # anthracite PETG
+        scene.add(k.light_pipe(L).rotate((0, 0, -35)).translate((x, 0, 0.05)), (0.55, 0.85, 1.0), specular=0.6)
+    scene.camera(position=(0, -330, 260), focal=(0, 0, 28), angle=30)
+    img = scene.image()
+    draw = ImageDraw.Draw(img, "RGBA")
+    for x, power, text in ((-58, "battery", "battery"), (58, "usb", "USB powered")):
+        L = k.layout(door_, power)
+        px, py = scene.project((x, -48, 0))
+        draw.text((px, py + 26), text, font=font(30), fill=(250, 248, 244), anchor="mm")
+        draw.text((px, py + 60), f"78 x {L.top:.1f} mm from the door", font=font(22), fill=(235, 228, 218), anchor="mm")
+    caption(img, "Two versions", "same mechanism and PCB; the USB one has no pouch and is 3.5 mm shorter").save(IMAGES / "v5_versions.png")
+
+
 if __name__ == "__main__":
+    versions()
     cutaway()
     exploded()
     presets()

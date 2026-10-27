@@ -98,6 +98,10 @@ WALL = 1.8
 CASE_R = BORE_R + WALL
 DECK_T = 1.2
 CAP_T = 1.5
+CAP_SPIGOT = 2.6
+# Finish: chamfers steeper than 45 deg (they print without support in any orientation) and the V-reveals they make
+# at the base / case and case / cap joints
+CHAMFER = (0.8, 1.2)              # radial, vertical
 SPIGOT = (31.2, 33.2, 4.0)        # base bayonet ring: inner r, outer r, height
 LUG = (8.0, 1.4, 2.0)             # tangential width, radial, height
 TWIST = 25.0
@@ -117,9 +121,17 @@ class Layout:
     pouch0: float
     cap0: float
     top: float
+    power: str = "battery"
 
 
-def layout(door):
+# Two versions from the same parts: "battery" (1200 mAh pouch under the cap) and "usb" (no pouch, USB-C powered,
+# 3.6 mm shorter). Only the case and the light pipe differ.
+POWERS = ("battery", "usb")
+POWER = "battery"
+
+
+def layout(door, power=None):
+    power = power or POWER
     b = door.base_h
     A = b + WING_TOP[1] + 0.5 + 4.0                 # 4 mm adapter disc above the tallest wing
     hub0 = A + 0.3
@@ -129,8 +141,11 @@ def layout(door):
     drive1 = drive0 + MOTOR["height"]
     deck0 = max(drive1 + 0.3, wheel_mid + WHEEL["face"] / 2 + WHEEL["boss_h"] + 0.4)   # clear of the wheel's boss
     pouch0 = deck0 + DECK_T + 0.2
-    cap0 = pouch0 + POUCH[2] + 0.2
-    return Layout(b, A, hub0, spiral_top, drive0, wheel_mid, drive1, deck0, pouch0, cap0, cap0 + CAP_T)
+    if power == "battery":
+        cap0 = pouch0 + POUCH[2] + 0.2
+    else:
+        cap0 = deck0 + DECK_T + CAP_SPIGOT + 0.3                                 # just room for the cap's spigot
+    return Layout(b, A, hub0, spiral_top, drive0, wheel_mid, drive1, deck0, pouch0, cap0, cap0 + CAP_T, power)
 
 
 # ---------------------------------------------------------------------------------------------------- helpers
@@ -154,6 +169,28 @@ def ring(r_in, r_out, z0, z1, seg=SEG):
     return cyl(r_out, z0, z1, seg) - cyl(r_in, z0 - 1, z1 + 1, seg)
 
 
+def chamfer_cut(r, z, up, dr=None, dz=None):
+    """Ring that cuts a chamfer off the outer edge of a cylinder of radius r at height z.
+    up: the edge is a top edge (the material is below z)."""
+    dr, dz = dr or CHAMFER[0], dz or CHAMFER[1]
+    if up:
+        cone = Manifold.cylinder(dz, r, r - dr, circular_segments=SEG).translate((0, 0, z - dz))
+        return ring(r - dr - 0.01, r + 1, z - dz, z + 0.01) - cone      # only the outer ring: never a whole face
+    cone = Manifold.cylinder(dz, r - dr, r, circular_segments=SEG).translate((0, 0, z))
+    return ring(r - dr - 0.01, r + 1, z - 0.01, z + dz) - cone
+
+
+def padlock_icon(depth, z_top, size=12.0):
+    """Padlock outline, cut 'depth' deep into a top face at z_top (centre of the cap)."""
+    s = size / 12.0
+    z0, z1 = z_top - depth, z_top + 1
+    body = rounded_box(9.0 * s, 7.0 * s, 1.2 * s, z0, z1, 0, -1.8 * s)
+    shackle = (cyl(3.3 * s, z0, z1, 48, 0, 1.7 * s) - cyl(2.1 * s, z0 - 1, z1 + 1, 48, 0, 1.7 * s)) - cube(-5 * s, 5 * s, -5 * s, 1.7 * s, z0 - 1, z1 + 1)
+    legs = cube(-3.3 * s, -2.1 * s, -0.5 * s, 1.75 * s, z0, z1) + cube(2.1 * s, 3.3 * s, -0.5 * s, 1.75 * s, z0, z1)
+    keyhole = cyl(0.9 * s, z0 - 1, z1 + 1, 24, 0, -1.3 * s) + cube(-0.45 * s, 0.45 * s, -3.6 * s, -1.3 * s, z0 - 1, z1 + 1)
+    return (body - keyhole) + shackle + legs
+
+
 def polar(r, a):
     a = math.radians(a)
     return r * math.cos(a), r * math.sin(a)
@@ -166,7 +203,11 @@ def rounded_box(lx, ly, r, z0, z1, x=0.0, y=0.0):
 
 
 def largest(part):
-    return max(part.decompose(), key=lambda p: p.volume())
+    """The main piece; slivers from coplanar cuts are dropped, but a real piece breaking off is an error."""
+    pieces = sorted(part.decompose(), key=lambda p: p.volume(), reverse=True)
+    lost = sum(p.volume() for p in pieces[1:])
+    assert lost < 20.0, f"a {lost:.0f} mm3 piece broke off"
+    return pieces[0]
 
 
 def to_trimesh(part):
@@ -306,6 +347,8 @@ def base(L, door):
     part += spigot
     lock_hole = cyl_y(1.25, -SPIGOT[1] - 1, -SPIGOT[0] + 0.5, 0.0, b + SPIGOT[2] / 2).rotate((0, 0, 30.0))
     part -= lock_hole
+    part -= chamfer_cut(CASE_R, b, up=True)                                    # half of the V-reveal to the case
+    part -= chamfer_cut(CASE_R, 0.0, up=False, dr=0.4, dz=0.6)                 # soft edge on the door
     return largest(part)
 
 
@@ -433,32 +476,51 @@ def case(L):
     # USB-C opening and the flexure side button (both at the PCB)
     jx, jy = board.FIXED["J1"][:2]
     usb_z = L.drive0 + board.THICKNESS + 1.6
-    part -= cube(jx - 6.0, jx + 6.0, -CASE_R - 1, -28.0, usb_z - 2.6, usb_z + 2.6)
+    # rounded opening big enough for a USB-C plug's moulding (12 x 6.5 mm) to reach the receptacle
+    w, hgt, r = 12.8, 7.0, 3.5
+    stadium = CrossSection.square((w - 2 * r, hgt), center=True).offset(r - 0.01, JoinType.Round, circular_segments=32)
+    opening = stadium.extrude(CASE_R + 1 - 28.0).rotate((-90, 0, 0)).translate((jx, -CASE_R - 1, usb_z))
+    flare = Manifold.hull(stadium.extrude(0.01).rotate((-90, 0, 0)).translate((jx, -CASE_R + 0.6, usb_z))
+                          + stadium.offset(0.6, JoinType.Round).extrude(0.01).rotate((-90, 0, 0)).translate((jx, -CASE_R - 0.01, usb_z)))
+    part -= opening + flare
     sx, sy, srot = board.FIXED["SW1"][:3]
     a = math.degrees(math.atan2(sy, sx))
     bz = L.drive0 + board.THICKNESS + 1.8
-    slot = cube(BORE_R - 1, CASE_R + 1, -5.3, 5.3, bz - 6.5, bz + 6.5) - cube(BORE_R - 1, CASE_R + 1, -4.5, 4.5, bz - 7.0, bz + 5.7)
-    nub = cube(BORE_R - 0.25, BORE_R + 0.01, -1.4, 1.4, bz - 1.4, bz + 1.4)
-    part -= slot.rotate((0, 0, a))
-    part -= (cube(BORE_R + 0.9, CASE_R + 1, -4.6, 4.6, bz - 4.0, bz + 7.0)).rotate((0, 0, a))  # thinner tongue
+    # Flexure button: a tongue cut free by a rounded U-slot, thinned from the inside so the outside stays flush
+    def radial(cs, r0, r1):          # a cross-section in (tangent, z) extruded radially from r0 to r1 (local frame)
+        return cs.extrude(r1 - r0).transform([[0, 0, 1, r0], [1, 0, 0, 0], [0, 1, 0, bz]])
+    outer = CrossSection.square((10.6 - 5.0, 13.0 - 5.0), center=True).offset(2.5, JoinType.Round, circular_segments=32)
+    inner = CrossSection.square((9.0 - 3.4, 12.2 - 3.4), center=True).offset(1.7, JoinType.Round, circular_segments=32)
+    slot = radial(outer, BORE_R - 1, CASE_R + 1) - radial(inner.translate((0, -0.8)), BORE_R - 1.5, CASE_R + 1.5)
+    slot -= cube(BORE_R - 2, CASE_R + 2, -6, 6, bz - 9, bz - 6.5)                 # the tongue's root stays attached
+    thin = radial(CrossSection.square((9.0, 11.0), center=True), BORE_R - 1, BORE_R + 0.9).translate((0, 0, 0.6))
+    nub = cube(BORE_R - 0.25, BORE_R + 0.91, -1.4, 1.4, bz - 1.4, bz + 1.4)
+    part -= (slot + thin).rotate((0, 0, a))
     part += nub.rotate((0, 0, a))
+    part -= Manifold.sphere(3.2, 32).translate((CASE_R + 2.8, 0, bz)).rotate((0, 0, a))   # finger dimple on the button
     # PCB ledges (the deck's posts hold the board down from above)
     for x, y in board.CLAMPS:
         ledge = cyl(board.CLAMP_R, L.drive0 - 2.0, L.drive0, 24, x, y) + Manifold.cylinder(3.0, 0.01, board.CLAMP_R, circular_segments=24).translate((x, y, L.drive0 - 5.0))   # 54 deg: no support
         part += ledge ^ cyl(BORE_R + 0.5, 0, 200)
     # Snap groove for the cap
     part -= ring(BORE_R - 0.01, BORE_R + 0.5, L.cap0 - 2.4, L.cap0 - 1.4)
+    # V-reveals: the case's bottom edge meets the base's chamfer, its top edge the cap's
+    part -= chamfer_cut(CASE_R, b, up=False)
+    part -= chamfer_cut(CASE_R, L.cap0, up=True, dr=0.5, dz=0.75)
     return largest(part)
 
 
 def cap(L):
     part = cyl(CASE_R, L.cap0, L.top)
-    spigot = ring(BORE_R - 1.4, BORE_R - 0.2, L.cap0 - 2.6, L.cap0 + 0.01)
+    spigot = ring(BORE_R - 1.4, BORE_R - 0.2, L.cap0 - CAP_SPIGOT, L.cap0 + 0.01)
     for a in (30.0, 150.0, 270.0):
         spigot += cyl(0.8, L.cap0 - 2.3, L.cap0 - 1.5, 16, *polar(BORE_R - 0.2, a)) ^ cyl(BORE_R + 0.3, 0, 200)
     part += spigot
     dx, dy = board.FIXED["D1"][:2]
     part -= cyl(1.7, L.cap0 - 1, L.top + 1, 24, dx, dy)                           # light pipe window
+    part -= chamfer_cut(CASE_R, L.cap0, up=False, dr=0.5, dz=0.75)              # other half of the reveal to the case
+    part -= chamfer_cut(CASE_R, L.top, up=True)                                 # soft top edge
+    part -= padlock_icon(0.6, L.top, size=18.0)                                 # debossed padlock in the middle
     return largest(part)
 
 
@@ -512,7 +574,7 @@ def assembly(door_name="rosette", h=FREE_PLAY / 2, k=0.0, wing=(40.0, 11.0, 17.0
         "motor": (motor_model(L), (0.75, 0.6, 0.25)),
         "pcb": (pcb_model(L), (0.1, 0.45, 0.25)),
         "deck": (deck(L), "bracket"),
-        "pouch": (pouch_model(L), (0.55, 0.55, 0.6)),
+        **({"pouch": (pouch_model(L), (0.55, 0.55, 0.6))} if L.power == "battery" else {}),
         "cap": (cap(L), "case"),
         "light_pipe": (light_pipe(L), (0.95, 0.97, 1.0)),
         "knob_magnet": (knob_mag, (0.6, 0.6, 0.65)),
@@ -532,6 +594,7 @@ PRINT = {   # part: (function, print rotation)
     "light_pipe": (lambda L, d: light_pipe(L), (0, 0, 0)),
     "wheel_drill_jig": (lambda L, d: wheel_drill_jig(L), (180, 0, 0)),
 }
+PER_POWER = ("case", "light_pipe")      # the only printed parts that differ between the battery and the USB version
 PER_DOOR = {
     "base": (lambda L, d: base(L, d), (0, 0, 0)),
     "install_jig": (lambda L, d: install_jig(L, d), (180, 0, 0)),
@@ -551,9 +614,13 @@ def export():
         m.export(out / f"{name}.stl")
         print(f"  {name + '.stl':30s} {np.round(m.extents, 1)} mm  {m.volume / 1000:5.1f} cm3")
 
-    L = layout(DOORS["rosette"])
-    for name, (make, rot) in PRINT.items():
-        save(make(L, None), rot, name)
+    for power in POWERS:
+        L = layout(DOORS["rosette"], power)
+        for name, (make, rot) in PRINT.items():
+            if name in PER_POWER:
+                save(make(L, None), rot, f"{name}_{power}")
+            elif power == POWERS[0]:
+                save(make(L, None), rot, name)
     for door in DOORS.values():
         L = layout(door)
         for name, (make, rot) in PER_DOOR.items():
@@ -561,9 +628,10 @@ def export():
 
 
 if __name__ == "__main__":
-    for door in DOORS.values():
-        L = layout(door)
-        print(f"{door.name:10s}: {2 * CASE_R:.1f} mm x {L.top:.1f} mm from the door (base {door.base_h} mm)")
+    for power in POWERS:
+        for door in DOORS.values():
+            L = layout(door, power)
+            print(f"{power:8s} {door.name:10s}: {2 * CASE_R:.1f} mm x {L.top:.1f} mm from the door (base {door.base_h} mm)")
     print()
     export()
     import checks

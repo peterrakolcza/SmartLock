@@ -1,0 +1,10 @@
+menu "Smart lock v5"
+
+config SMARTLOCK_USB_POWERED
+    bool "USB-powered version (no battery)"
+    default n
+    help
+        The PCB's R13 links USB 5 V to the battery rail, there is no pouch. The lock reports a wired power
+        source instead of a battery level, and Thread runs as a router (sdkconfig.defaults.usb).
+
+endmenu

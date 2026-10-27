@@ -1,4 +1,6 @@
-// v5 smart lock firmware: ESP32-C6, Matter door lock over Thread as a sleepy end device, worm drive + spiral coupling.
+// v5 smart lock firmware: ESP32-C6, Matter door lock over Thread, worm drive + spiral coupling.
+// Two builds: battery (Thread sleepy end device, sdkconfig.defaults) and USB powered (Thread router,
+// CONFIG_SMARTLOCK_USB_POWERED via sdkconfig.defaults.usb).
 //
 // Hardware: PCB/v5 (pins in PCB/v5/layout.py). The motion logic is code/smart_lock/motion.h, the same file the
 // simulation in code/tests/motion checks.
@@ -6,7 +8,7 @@
 // Button: short press = lock / unlock, hold 6 s = forget the learned turns, hold 12 s = factory reset (leaves Matter).
 // LED: blinks while moving, fast blinking = jammed, short flash every 2 s = not commissioned.
 //
-// Power: between Thread polls the chip is in automatic light sleep. The main task blocks until the button or the
+// Power (battery build): between Thread polls the chip is in automatic light sleep. The main task blocks until the button or the
 // thumb-turn sensor changes level (GPIO wake), a Matter command arrives, or the next battery report is due. While the
 // motor runs, a PM lock keeps the CPU awake.
 
@@ -53,7 +55,7 @@ static uint32_t millis() { return (uint32_t)(esp_timer_get_time() / 1000); }
 MotionController motion;
 static nvs_handle_t prefs;
 static SemaphoreHandle_t wakeSignal;
-static esp_pm_lock_handle_t awakeLock;
+static esp_pm_lock_handle_t awakeLock = nullptr;   // battery build only (power management)
 static uint16_t lockEndpoint = 0;
 static uint16_t powerEndpoint = 0;
 static volatile bool commissioned = false;
@@ -141,13 +143,14 @@ static void hardwareBegin() {
   for (gpio_num_t pin : WAKE_PINS) gpio_isr_handler_add(pin, onWakePin, (void *)(intptr_t)pin);
   armWakePins();
   esp_sleep_enable_gpio_wakeup();
+#if CONFIG_PM_ENABLE
   esp_pm_lock_create(ESP_PM_NO_LIGHT_SLEEP, 0, "motor", &awakeLock);
-
   esp_pm_config_t pm = {};
   pm.max_freq_mhz = CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ;
   pm.min_freq_mhz = CONFIG_XTAL_FREQ;
   pm.light_sleep_enable = true;
   ESP_ERROR_CHECK(esp_pm_configure(&pm));
+#endif
 }
 
 // ------------------------------------------------------------------------------------------------- Matter
@@ -224,9 +227,13 @@ static void matterBegin(bool locked) {
   assert(ep);
   lockEndpoint = endpoint::get_id(ep);
 
-  // Battery level for the home apps (on the lock's endpoint)
+  // Power source for the home apps (on the lock's endpoint): battery level, or "wired" for the USB version
   cluster::power_source::config_t ps;
+#if CONFIG_SMARTLOCK_USB_POWERED
+  ps.feature_flags = cluster::power_source::feature::wired::get_id();
+#else
   ps.feature_flags = cluster::power_source::feature::battery::get_id() | cluster::power_source::feature::rechargeable::get_id();
+#endif
   cluster::power_source::create(ep, &ps, CLUSTER_FLAG_SERVER);
   powerEndpoint = lockEndpoint;
 
@@ -270,7 +277,7 @@ static void startMotion(bool toLocked, DoorLock::OperationSourceEnum source) {
     return;
   }
   lastSource = source;
-  esp_pm_lock_acquire(awakeLock);
+  if (awakeLock) esp_pm_lock_acquire(awakeLock);
   motion.start(toLocked, millis(), knobActive(), hubActive());
 }
 
@@ -296,7 +303,7 @@ static void handleMotion() {
   }
   manualCounter = 0;
   knobWas = knobActive();
-  esp_pm_lock_release(awakeLock);
+  if (awakeLock) esp_pm_lock_release(awakeLock);
 }
 
 // The key turned the thumb-turn by hand: count turns with the knob sensor
@@ -347,6 +354,9 @@ static void handleLed() {
 static uint32_t lastBattery = 0;
 
 static void handleBattery() {
+#if CONFIG_SMARTLOCK_USB_POWERED
+  return;                                   // no battery: the divider sees the USB rail
+#endif
   if (lastBattery != 0 && millis() - lastBattery < BATTERY_INTERVAL_MS) return;
   lastBattery = millis() | 1;
   reportBattery(batteryPercent());
@@ -354,7 +364,11 @@ static void handleBattery() {
 
 // Block until something can happen: a pin, a command, the LED or button timers, or the next battery report
 static void idleWait() {
+#if CONFIG_SMARTLOCK_USB_POWERED
+  uint32_t wait = 1000;                     // nothing to time: just a slow heartbeat
+#else
   uint32_t wait = BATTERY_INTERVAL_MS - (millis() - lastBattery);
+#endif
   if (ledBlinking() || pressedAt != 0) wait = 40;
   armWakePins();
   xSemaphoreTake(wakeSignal, pdMS_TO_TICKS(wait));
