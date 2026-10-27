@@ -111,6 +111,14 @@ The lock now detects this: if the thumb-turn stops before the learned number of 
 
 <br>
 
+## 🧭 v5 concept: what a clean-sheet redesign would look like
+
+A proposal on this branch ([`redesign/`](redesign/README.md)). It is battery powered (78 × 71 mm including batteries), uses a flat gearmotor with a worm, keeps the spiral coupling, adds an absolute encoder, and runs Matter over Thread on an ESP32-C6. The packaging is checked in CAD; the PCB and firmware are not built yet.
+
+<img src="images/v5_cutaway.png" width="640" />
+
+<br>
+
 ## 🌀 Single servo, key turns freely
 
 Without help, turning the key or the thumb-turn by hand means back-driving the servo gearbox. Here a **spiral coupling** sits between the servo and the thumb-turn: a pin runs in a 2.75-turn spiral groove under the servo hub. Inside the spiral the key turns freely, and only at its ends does the servo drive the lock. After every movement the servo backs off into the spiral, counted by a small hall sensor on the RX pin. It uses **one servo, has nothing to calibrate, and the V3 PCB is unchanged**. The case is 82 × 85 mm.
