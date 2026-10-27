@@ -1,0 +1,5 @@
+__pycache__/
+*.kicad_prl
+*-backups/
+fp-info-cache
+drc.json

@@ -111,9 +111,9 @@ The lock now detects this: if the thumb-turn stops before the learned number of 
 
 <br>
 
-## 🧭 v5 concept: what a clean-sheet redesign would look like
+## 🧭 v5: self-adhesive, universal, battery powered
 
-A proposal on this branch ([`redesign/`](redesign/README.md)). It is battery powered (78 × 71 mm including batteries), uses a flat gearmotor with a worm, keeps the spiral coupling, adds an absolute encoder, and runs Matter over Thread on an ESP32-C6. The packaging is checked in CAD; the PCB and firmware are not built yet.
+Designed end to end on this branch ([`redesign/`](redesign/README.md)): self-adhesive (3M VHB, nothing screwed to the door), universal (three base presets, an adapter with two screw jaws for most thumb-turns), a 1200 mAh pouch with USB-C charging, an N20 gearmotor with a self-locking worm over the spiral coupling, and Matter over Thread on an ESP32-C6. 78 × 63 mm from the door. The CAD passes 40 fit / motion / strength / printability checks, the PCB is generated, routed and DRC-checked in KiCad, and the firmware builds (the low-power Thread build that the battery life depends on is still to do); none of it is built and tested on a door yet.
 
 <img src="images/v5_cutaway.png" width="640" />
 

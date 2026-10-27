@@ -1,0 +1,6 @@
+.pio/
+# pioarduino custom_sdkconfig builds
+.dummy/
+managed_components/
+sdkconfig*
+dependencies.lock

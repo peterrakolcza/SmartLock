@@ -23,7 +23,9 @@
 #include <stdint.h>
 
 #define MOTION_DEBOUNCE_MS 120        // sensor bounce / magnet lingering in front of the sensor
-#define MOTION_DEFAULT_REV_MS 1200    // hub revolution time until learned
+#ifndef MOTION_DEFAULT_REV_MS
+#define MOTION_DEFAULT_REV_MS 1200    // hub revolution time until learned (v5's worm drive sets its own)
+#endif
 #define MOTION_MAX_TURNS 5            // learning: more knob turns than this means no end stop, give up
 #define MOTION_SPIRAL_TURNS 2.75f     // free play of the coupling (the CAD's SPIRAL_TURNS)
 
